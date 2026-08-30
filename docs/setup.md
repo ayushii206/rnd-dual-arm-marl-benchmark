@@ -1,192 +1,76 @@
-# R&D Project — Setup, Installation, and Development Progress
+# Dual-Arm MARL Benchmark — Setup and Development Documentation
 
-## Project Title
+## 1. Project Overview
 
-**Benchmarking Classical Control and Decentralized Multi-Agent Reinforcement Learning for Cooperative Dual-Arm Object Transport**
+**Project title:**  
+Benchmarking Classical Control and Decentralized Multi-Agent Reinforcement Learning for Cooperative Dual-Arm Object Transport
 
-## 1. Purpose of This Document
+The objective of this project is to benchmark classical robotic control methods against decentralized multi-agent reinforcement learning methods for cooperative object transport using two robotic manipulators.
 
-This document records the software environment, installation procedure, model setup, implementation steps, verification tests, and development progress of the R&D project.
+The project is simulation-only and uses MuJoCo with two Franka Emika Panda manipulators.
 
-The purpose is to ensure that:
+The planned methods are:
 
-- the development environment can be reproduced;
-- important implementation decisions are documented;
-- completed milestones can be tracked;
-- experiments can later be reproduced on another computer or university compute cluster;
-- the relationship between the MuJoCo implementation and the final benchmarking environment remains clear.
+- Classical control
+- Independent Proximal Policy Optimization (IPPO)
+- Multi-Agent Proximal Policy Optimization (MAPPO)
 
-This document should be updated throughout the project as new components are implemented.
-
----
-
-# 2. Project Objective
-
-The objective of the project is to develop a simulation-based benchmarking framework for cooperative dual-arm object transport.
-
-Two Franka Emika Panda robotic manipulators will ultimately cooperate to transport a shared rigid object toward a specified goal.
-
-The final benchmark is intended to compare:
-
-1. Classical cooperative control
-2. Independent Proximal Policy Optimization (IPPO)
-3. Multi-Agent Proximal Policy Optimization (MAPPO)
-
-The methods will eventually be evaluated using common performance metrics and robustness conditions.
-
-The current development phase focuses on constructing and validating the MuJoCo simulation environment before implementing the complete dual-arm task and learning algorithms.
+All approaches will operate on the same cooperative transport task and will later be evaluated using common performance and robustness metrics.
 
 ---
 
-# 3. Development Machine
+## 2. Planned Evaluation Metrics
 
-Initial development is being performed on:
+The main evaluation metrics are:
 
-- Device: MacBook Pro 15-inch (2018)
-- Processor: 2.6 GHz 6-Core Intel Core i7
-- Architecture: Intel x86_64
-- Memory: 32 GB 2400 MHz DDR4
-- Graphics: Intel UHD Graphics 630
-- Operating System: macOS Sequoia 15.7.7
+- Task success rate
+- Task completion time
+- Object stability
+- Collision count
+- Control smoothness
+- Training convergence for reinforcement learning methods
+- Robustness to environmental variations and disturbances
 
-This machine is being used primarily for:
+Planned robustness tests include:
 
-- MuJoCo environment development
-- robot model development
-- controller implementation
-- debugging
-- visualization
-- Gymnasium environment development
-- small-scale RL tests
-- experiment analysis
-- documentation
-
-Large-scale reinforcement-learning experiments may later be transferred to university computing resources.
+- Sensor noise
+- Action noise
+- Object mass variation
+- Friction variation
+- External disturbances
 
 ---
 
-# 4. Software Environment
+## 3. Development Environment
 
-The current environment uses:
+Development is currently performed on:
 
+- macOS Sequoia
+- Intel-based MacBook Pro
 - Python 3.11
-- Python virtual environment (`venv`)
 - MuJoCo 3.8.1
-- NumPy
-- SciPy
-- Matplotlib
-- Pandas
-- Gymnasium
-- Git
-- GitHub
 
-The Python dependencies are recorded in:
+A Python virtual environment is used for development.
 
-```text
-requirements.txt
-```
-
----
-
-# 5. Why MuJoCo 3.8.1 Is Used
-
-The development machine is an Intel-based Mac using the `x86_64` architecture.
-
-An unpinned installation attempt using:
-
-```bash
-pip install mujoco
-```
-
-attempted to install MuJoCo 3.12.0 from source instead of using a compatible prebuilt Intel macOS wheel.
-
-The source build failed with:
-
-```text
-RuntimeError: MUJOCO_PATH environment variable is not set
-```
-
-MuJoCo 3.8.1 was therefore installed explicitly:
-
-```bash
-pip install "mujoco==3.8.1"
-```
-
-This version successfully installed and runs on the current Intel Mac development environment.
-
-The project should therefore keep the MuJoCo version pinned for reproducibility.
-
----
-
-# 6. Repository
-
-Repository directory:
-
-```text
-rnd-dual-arm-marl-benchmark
-```
-
-The project is maintained using Git and GitHub.
-
-The repository will contain source code, simulation models, experiment configurations, documentation, and results required to reproduce the benchmark.
-
----
-
-# 7. Python Virtual Environment Setup
-
-From the repository root, the virtual environment was created using:
-
-```bash
-python3.11 -m venv .venv
-```
-
-The environment is activated using:
+Activate the environment with:
 
 ```bash
 source .venv/bin/activate
 ```
 
-When active, the terminal displays:
-
-```text
-(.venv)
-```
-
-The Python executable can be verified using:
-
-```bash
-which python
-```
-
-The path should point to:
-
-```text
-<repository>/.venv/bin/python
-```
-
 ---
 
-# 8. Installing MuJoCo
+## 4. MuJoCo Installation
 
-With the virtual environment activated:
+The latest MuJoCo release could not be installed directly on the Intel macOS development machine because recent PyPI releases do not provide the required macOS x86_64 binary wheel.
 
-```bash
-pip install "mujoco==3.8.1"
-```
-
-Installation can be verified using:
+MuJoCo 3.8.1 was therefore installed:
 
 ```bash
-python -c "import mujoco; print(mujoco.__version__)"
+pip install mujoco==3.8.1
 ```
 
-Expected version:
-
-```text
-3.8.1
-```
-
-A second import test is:
+The installation was verified with:
 
 ```bash
 python -c "import mujoco; print('MuJoCo installation successful')"
@@ -198,149 +82,60 @@ Expected output:
 MuJoCo installation successful
 ```
 
----
-
-# 9. Installing Additional Python Dependencies
-
-The basic scientific and environment packages were installed using:
+Viewer-based scripts on macOS are executed using:
 
 ```bash
-pip install gymnasium scipy matplotlib pandas
+mjpython <script>
 ```
 
-The complete environment is saved using:
-
-```bash
-pip freeze > requirements.txt
-```
-
-A future machine can recreate the Python environment using:
-
-```bash
-pip install -r requirements.txt
-```
-
-The same Python version should preferably be used when reproducing the environment.
+rather than standard Python when required by the MuJoCo viewer.
 
 ---
 
-# 10. MuJoCo Installation Verification
+## 5. Franka Emika Panda Model
 
-A minimal MuJoCo physics simulation was implemented before introducing a robot model.
+The Franka Emika Panda model is based on the MuJoCo Menagerie Panda model.
 
-The test consisted of:
-
-- a ground plane;
-- a free rigid box;
-- gravity;
-- MuJoCo physics stepping.
-
-The box was initialized above the ground plane.
-
-During simulation, the box:
-
-1. fell under gravity;
-2. contacted the ground;
-3. remained on the plane.
-
-This verified that:
-
-- MuJoCo could load a model;
-- physics stepping worked;
-- gravity worked;
-- collision/contact handling worked;
-- the graphical viewer worked.
-
-Relevant scripts:
+The customized Panda model is stored under:
 
 ```text
-scripts/test_mujoco.py
-scripts/test_viewer.py
+assets/models/custom_panda/
 ```
 
-On macOS, graphical passive-viewer scripts are executed using:
+A custom end-effector site was added to the Panda hand.
 
-```bash
-mjpython scripts/test_viewer.py
+The modified model is:
+
+```text
+assets/models/custom_panda/panda_with_site.xml
 ```
+
+The end-effector site is defined approximately as:
+
+```xml
+<site
+    name="ee_site"
+    pos="0 0 0.10"
+    size="0.01"
+    rgba="1 0 0 1"
+/>
+```
+
+This site is used for:
+
+- End-effector position tracking
+- Jacobian calculation
+- Inverse kinematics
+- Future Cartesian control
+- Future grasp pose definition
 
 ---
 
-# 11. Franka Panda Model
+## 6. Single-Panda Validation
 
-The Franka Emika Panda model is based on the MuJoCo Menagerie model collection.
+The Panda model was inspected to verify joints, actuators, bodies, and model dimensions.
 
-The Menagerie repository was added under:
-
-```text
-assets/models/mujoco_menagerie/
-```
-
-The Panda model is located at:
-
-```text
-assets/models/mujoco_menagerie/franka_emika_panda/
-```
-
-Important files include:
-
-```text
-panda.xml
-scene.xml
-assets/
-```
-
-The original Menagerie model should remain unmodified.
-
-Project-specific modifications should be made using separate custom model files.
-
----
-
-# 12. Loading the Panda Robot
-
-The Panda scene was loaded using:
-
-```python
-model = mujoco.MjModel.from_xml_path(str(MODEL_PATH))
-data = mujoco.MjData(model)
-```
-
-The model was successfully displayed using the MuJoCo viewer.
-
-Relevant script:
-
-```text
-scripts/view_panda.py
-```
-
-Run using:
-
-```bash
-mjpython scripts/view_panda.py
-```
-
-This verified that:
-
-- the Panda model loads correctly;
-- mesh assets are available;
-- the robot can be rendered;
-- the model is compatible with the installed MuJoCo version.
-
----
-
-# 13. Panda Model Inspection
-
-The Panda model was inspected programmatically.
-
-Relevant script:
-
-```text
-scripts/inspect_panda.py
-```
-
-The model contains nine joints.
-
-## Arm Joints
+The Panda contains the following arm joints:
 
 ```text
 joint1
@@ -352,145 +147,14 @@ joint6
 joint7
 ```
 
-These correspond to the seven articulated joints of the Panda arm.
-
-## Gripper Joints
+and two finger joints:
 
 ```text
 finger_joint1
 finger_joint2
 ```
 
-These correspond to the two gripper fingers.
-
----
-
-# 14. Panda Actuators
-
-Eight actuators were identified:
-
-```text
-actuator1
-actuator2
-actuator3
-actuator4
-actuator5
-actuator6
-actuator7
-actuator8
-```
-
-The first seven actuators control the seven arm joints.
-
-The eighth actuator controls the gripper mechanism.
-
-Therefore:
-
-```text
-7 arm actuators
-+
-1 gripper actuator
-=
-8 actuators
-```
-
-The number of joints and actuators should not be assumed to be identical.
-
----
-
-# 15. Panda Body Structure
-
-The following bodies were identified:
-
-```text
-world
-link0
-link1
-link2
-link3
-link4
-link5
-link6
-link7
-hand
-left_finger
-right_finger
-```
-
-The body:
-
-```text
-hand
-```
-
-was initially used as the end-effector reference.
-
-The finger bodies are:
-
-```text
-left_finger
-right_finger
-```
-
-The original Panda model did not contain a site suitable for the project's desired gripper-center task-space reference.
-
----
-
-# 16. Single-Joint Control Test
-
-A first control experiment commanded one Panda actuator while leaving the remaining arm actuators unchanged.
-
-Relevant script:
-
-```text
-scripts/move_one_joint.py
-```
-
-The test confirmed that:
-
-- actuator commands can be supplied through `data.ctrl`;
-- an individual Panda joint can be controlled;
-- the model responds correctly to position commands.
-
----
-
-# 17. Seven-Joint Control Test
-
-A predefined seven-joint target configuration was subsequently applied.
-
-Relevant script:
-
-```text
-scripts/move_all_joints.py
-```
-
-An example target configuration used during testing was:
-
-```python
-target[0] = 0.0
-target[1] = -0.5
-target[2] = 0.0
-target[3] = -2.0
-target[4] = 0.0
-target[5] = 1.5
-target[6] = 0.8
-```
-
-The Panda successfully moved from its initial configuration to the commanded configuration.
-
-This verified that all seven arm joints can be controlled simultaneously.
-
----
-
-# 18. Robot State Reading
-
-Robot state access was implemented in:
-
-```text
-scripts/read_panda_state.py
-```
-
-The initial model dimensions were:
+The single Panda model has:
 
 ```text
 nq = 9
@@ -498,432 +162,50 @@ nv = 9
 nu = 8
 ```
 
-Where:
+The end-effector site was successfully detected and tracked.
 
-- `nq` is the number of generalized position coordinates;
-- `nv` is the number of generalized velocity coordinates;
-- `nu` is the number of control inputs.
-
-The initial state was:
+Example initial end-effector position:
 
 ```text
-qpos = [0. 0. 0. 0. 0. 0. 0. 0. 0.]
-qvel = [0. 0. 0. 0. 0. 0. 0. 0. 0.]
-ctrl = [0. 0. 0. 0. 0. 0. 0. 0.]
+[0.088, 0.000, 0.826]
 ```
 
-The individual joint positions were also mapped to their corresponding joint names.
-
-This functionality will later be used when constructing observations for the reinforcement-learning environment.
+Single-arm movement was successfully tested before constructing the dual-arm environment.
 
 ---
 
-# 19. End-Effector Tracking Using the Hand Body
+## 7. Dual-Panda Model Generation
 
-The Panda `hand` body was initially used as the end-effector reference.
+The dual-arm environment is generated from the customized Panda model.
 
-The body ID was obtained using:
-
-```python
-hand_id = mujoco.mj_name2id(
-    model,
-    mujoco.mjtObj.mjOBJ_BODY,
-    "hand"
-)
-```
-
-Its world position was obtained using:
-
-```python
-data.xpos[hand_id]
-```
-
-At the initial configuration, the hand position was:
+The generation script is:
 
 ```text
-[0.088, 0.000, 0.926]
+scripts/create_dual_panda_models.py
 ```
 
-Its orientation was available through:
-
-```python
-data.xmat[hand_id]
-```
-
-The initial hand rotation matrix was:
+It creates:
 
 ```text
-[[ 0.70710681  0.70710676  0.        ]
- [ 0.70710676 -0.70710681  0.        ]
- [ 0.          0.         -1.        ]]
+assets/models/dual_panda/left_panda.xml
+assets/models/dual_panda/right_panda.xml
 ```
 
----
-
-# 20. Tracking the End Effector During Motion
-
-The hand position was tracked while commanding the predefined seven-joint configuration.
-
-Relevant script:
+Names are prefixed with either:
 
 ```text
-scripts/track_end_effector.py
+left_
 ```
 
-The initial hand position was approximately:
+or:
 
 ```text
-[0.088, 0.000, 0.926]
+right_
 ```
 
-After the robot moved, the position settled at approximately:
+to prevent conflicts between the two robots.
 
-```text
-[0.387, 0.000, 0.648]
-```
-
-Example recorded values:
-
-```text
-Step      0 | Hand xyz =  0.088,  0.000,  0.926
-Step    500 | Hand xyz =  0.387,  0.000,  0.648
-Step   1000 | Hand xyz =  0.387,  0.000,  0.648
-Step   1500 | Hand xyz =  0.387,  0.000,  0.648
-Step   2000 | Hand xyz =  0.387,  0.000,  0.648
-```
-
-This verified the relationship:
-
-```text
-joint command
-    ↓
-joint configuration
-    ↓
-forward kinematics
-    ↓
-end-effector Cartesian position
-```
-
-This relationship is important for both classical task-space control and reinforcement-learning observations/rewards.
-
----
-
-# 21. Custom End-Effector Site
-
-A custom project-specific Panda model was created so that the original Menagerie model remains unchanged.
-
-Custom model directory:
-
-```text
-assets/models/custom_panda/
-```
-
-Custom model:
-
-```text
-assets/models/custom_panda/panda_with_site.xml
-```
-
-A site named:
-
-```text
-ee_site
-```
-
-was added to the `hand` body.
-
-The site definition is:
-
-```xml
-<site
-    name="ee_site"
-    pos="0 0 0.10"
-    size="0.01"
-    rgba="1 0 0 1"
-/>
-```
-
-The site is attached to the hand and provides a task-space reference around the gripper working region.
-
----
-
-# 22. End-Effector Site Verification
-
-The site was tested using:
-
-```text
-scripts/test_ee_site.py
-```
-
-The site ID was obtained using:
-
-```python
-site_id = mujoco.mj_name2id(
-    model,
-    mujoco.mjtObj.mjOBJ_SITE,
-    "ee_site"
-)
-```
-
-Its world position was obtained using:
-
-```python
-data.site_xpos[site_id]
-```
-
-The verification output was:
-
-```text
-ee_site ID: 0
-ee_site position: [0.088 0.    0.826]
-```
-
-The site was also successfully visualized as a red marker around the gripper region.
-
-This confirms that the custom task-space reference can be accessed programmatically and visually.
-
----
-
-# 23. Purpose of the End-Effector Site
-
-The custom end-effector site is intended to support later development of:
-
-- inverse kinematics;
-- Cartesian end-effector control;
-- grasp-point definition;
-- distance-to-object calculations;
-- reinforcement-learning observations;
-- reward calculations;
-- cooperative dual-arm coordination.
-
-In the dual-arm model, separate references will be required, conceptually:
-
-```text
-left_ee_site
-right_ee_site
-```
-
-This will allow the two end-effectors to be tracked independently.
-
----
-
-# 24. Current Repository Components
-
-At the current development stage, important files include:
-
-```text
-rnd-dual-arm-marl-benchmark/
-│
-├── .venv/
-│
-├── assets/
-│   └── models/
-│       ├── mujoco_menagerie/
-│       │   └── franka_emika_panda/
-│       │
-│       └── custom_panda/
-│           ├── panda_with_site.xml
-│           ├── scene.xml
-│           └── assets/
-│
-├── docs/
-│   ├── panda_model_notes.md
-│   └── SETUP_AND_PROGRESS.md
-│
-├── scripts/
-│   ├── test_mujoco.py
-│   ├── test_viewer.py
-│   ├── view_panda.py
-│   ├── inspect_panda.py
-│   ├── move_one_joint.py
-│   ├── move_all_joints.py
-│   ├── read_panda_state.py
-│   ├── track_end_effector.py
-│   └── test_ee_site.py
-│
-└── requirements.txt
-```
-
-The exact repository structure may be expanded as the project progresses.
-
----
-
-# 25. How to Run the Current Project
-
-## 25.1 Open Terminal
-
-Navigate to the repository:
-
-```bash
-cd ~/Documents/RnD/rnd-dual-arm-marl-benchmark
-```
-
-## 25.2 Activate the Environment
-
-```bash
-source .venv/bin/activate
-```
-
-The prompt should begin with:
-
-```text
-(.venv)
-```
-
-## 25.3 Verify MuJoCo
-
-```bash
-python -c "import mujoco; print(mujoco.__version__)"
-```
-
-Expected:
-
-```text
-3.8.1
-```
-
-## 25.4 Run Basic Physics Test
-
-```bash
-python scripts/test_mujoco.py
-```
-
-## 25.5 Run Viewer Test
-
-```bash
-mjpython scripts/test_viewer.py
-```
-
-## 25.6 View Panda
-
-```bash
-mjpython scripts/view_panda.py
-```
-
-## 25.7 Inspect Panda
-
-```bash
-python scripts/inspect_panda.py
-```
-
-## 25.8 Move One Joint
-
-```bash
-mjpython scripts/move_one_joint.py
-```
-
-## 25.9 Move All Seven Arm Joints
-
-```bash
-mjpython scripts/move_all_joints.py
-```
-
-## 25.10 Read Panda State
-
-```bash
-python scripts/read_panda_state.py
-```
-
-## 25.11 Track End Effector
-
-```bash
-mjpython scripts/track_end_effector.py
-```
-
-## 25.12 Test Custom End-Effector Site
-
-```bash
-mjpython scripts/test_ee_site.py
-```
-
----
-
-# 26. Current Development Status
-
-## Completed
-
-- [x] Repository created
-- [x] Python 3.11 environment created
-- [x] MuJoCo 3.8.1 installed
-- [x] MuJoCo import verified
-- [x] Basic physics simulation verified
-- [x] MuJoCo viewer verified
-- [x] Gravity verified
-- [x] Contact/collision with ground verified
-- [x] MuJoCo Menagerie obtained
-- [x] Franka Panda model loaded
-- [x] Panda model visualized
-- [x] Panda joints inspected
-- [x] Panda actuators inspected
-- [x] Panda body structure inspected
-- [x] One Panda joint controlled
-- [x] Seven Panda arm joints controlled
-- [x] Joint positions accessed
-- [x] Joint velocities accessed
-- [x] Control values accessed
-- [x] Hand Cartesian position accessed
-- [x] Hand orientation accessed
-- [x] End-effector position tracked during motion
-- [x] Custom Panda model created
-- [x] Custom `ee_site` added
-- [x] `ee_site` successfully visualized
-- [x] `ee_site` successfully accessed programmatically
-- [x] Python dependencies recorded
-
----
-
-# 27. Current Project Phase
-
-The project is currently transitioning from:
-
-```text
-MuJoCo setup and single-arm verification
-```
-
-to:
-
-```text
-dual-arm cooperative manipulation environment development
-```
-
-The installation and single-Panda technical foundation is complete.
-
-The next major milestone is construction of the actual benchmarking environment.
-
----
-
-# 28. Planned Benchmark Scene
-
-The long-term simulation environment will contain:
-
-- two Franka Panda robotic arms;
-- a shared rigid transport object;
-- a ground/table workspace;
-- a target region;
-- independent left and right end-effector references;
-- object state information;
-- goal state information.
-
-The initial benchmark object will preferably be a simple rigid rectangular box.
-
-A box is selected initially because it provides:
-
-- simple collision geometry;
-- clearly defined grasp regions;
-- straightforward mass variation;
-- straightforward friction variation;
-- straightforward orientation/stability measurements;
-- easier debugging than a complex object.
-
-A table-like object may later be introduced as an extension if the core benchmark is completed successfully.
-
----
-
-# 29. Planned Dual-Arm Naming Convention
-
-The two Panda robots must have unique MuJoCo names.
-
-The intended naming convention is:
+Examples include:
 
 ```text
 left_joint1
@@ -937,319 +219,882 @@ right_joint2
 right_joint7
 ```
 
-Similarly:
-
-```text
-left_actuator1
-...
-left_actuator8
-
-right_actuator1
-...
-right_actuator8
-```
-
-End-effector references:
+The end-effector sites become:
 
 ```text
 left_ee_site
 right_ee_site
 ```
 
-Hand bodies:
+Actuator names are also prefixed.
+
+---
+
+## 8. Dual-Arm Scene Construction
+
+Directly including two complete Panda XML files caused duplicate MuJoCo default-class definitions.
+
+Therefore, the combined scene is generated programmatically using:
 
 ```text
-left_hand
-right_hand
+scripts/build_dual_arm_scene.py
 ```
 
-Unique naming is necessary to allow independent state access and control for each robotic agent.
+The script uses one Panda model as the base and merges the required components of the second Panda into the same MuJoCo model.
 
----
-
-# 30. Planned Cooperative Transport Task
-
-The intended task is:
-
-1. initialize two Panda arms around a shared rigid object;
-2. position the two end effectors at appropriate grasp/support locations;
-3. establish cooperative interaction with the object;
-4. move the object toward a specified target;
-5. maintain object stability during transport;
-6. avoid invalid collisions or object dropping;
-7. determine task success using measurable criteria.
-
-The same environment and evaluation criteria will ultimately be used for classical control, IPPO, and MAPPO.
-
----
-
-# 31. Planned Observation Information
-
-The exact RL observation space has not yet been finalized.
-
-Potential state information includes:
+The resulting scene is:
 
 ```text
-left arm joint positions
-left arm joint velocities
-right arm joint positions
-right arm joint velocities
-left end-effector position
-right end-effector position
-object position
-object orientation
-object velocity
-goal position
-relative end-effector/object positions
-relative object/goal position
+assets/models/dual_panda/dual_arm_scene.xml
 ```
 
-Only information justified by the final experimental design should be included.
+The two robots are placed on opposite sides of the central workspace.
 
----
+### Left Panda placement
 
-# 32. Planned Action Representation
+```python
+child.set("pos", "0 0.65 0")
+child.set("quat", "0.7071068 0 0 -0.7071068")
+```
 
-The project proposal specifies joint-level control commands.
+### Right Panda placement
 
-The exact RL action representation will be finalized after the dual-arm environment and classical baseline are operational.
+```python
+new_child.set("pos", "0 -0.65 0")
+new_child.set("quat", "0.7071068 0 0 0.7071068")
+```
 
-Potential options include:
+The two robots therefore face inward toward the shared workspace.
 
-- joint position targets;
-- joint position increments;
-- joint velocity commands.
-
-The same physical control interface should be used as consistently as possible when comparing learning-based methods.
-
----
-
-# 33. Planned Evaluation Metrics
-
-The benchmark is expected to include metrics such as:
-
-- task success rate;
-- task completion time;
-- object stability;
-- object position error;
-- object orientation/tilt;
-- collision behavior;
-- learning convergence for RL methods;
-- robustness under selected disturbances.
-
-The exact mathematical definitions and acceptance thresholds remain to be finalized.
-
----
-
-# 34. Planned Robustness Conditions
-
-After nominal transport works, selected robustness experiments may include:
-
-- object mass variation;
-- friction variation;
-- sensor/state noise;
-- action disturbances;
-- external perturbations.
-
-The final number of robustness experiments will depend on available development and training time.
-
-The priority is to perform a smaller number of well-controlled and reproducible experiments rather than a large number of incomplete experiments.
-
----
-
-# 35. Next Development Tasks
-
-The immediate sequence is:
+The combined model has:
 
 ```text
-Single Panda foundation complete
-        ↓
-Create dual-Panda model
-        ↓
-Assign unique left/right names
-        ↓
-Place both robots in custom scene
-        ↓
-Verify both robots load
-        ↓
-Read both robot states independently
-        ↓
-Control both robots independently
-        ↓
-Add transport object
-        ↓
-Add goal region
-        ↓
-Define object/grasp reference sites
-        ↓
-Develop basic task-space/IK control
-        ↓
-Implement classical cooperative baseline
-        ↓
-Create Gymnasium/MARL environment
-        ↓
-Define observations/actions/reward
-        ↓
-IPPO integration
-        ↓
-MAPPO integration
-        ↓
-Benchmarking
-        ↓
+nq = 18
+nv = 18
+nu = 16
+```
+
+---
+
+## 9. Dual-Arm Control Validation
+
+Independent actuator control was tested before introducing the transport task.
+
+Relevant scripts include:
+
+```text
+scripts/view_dual_arm_scene.py
+scripts/inspect_dual_arm_scene.py
+scripts/test_dual_arm_control.py
+```
+
+The test confirmed that:
+
+- The left Panda can move independently.
+- The right Panda can remain stationary while the left Panda moves.
+- The right Panda can move independently.
+- The robots are correctly mirrored around the central workspace.
+- Both robots expose independently accessible end-effector states.
+
+Example inward end-effector positions reached during early testing were approximately:
+
+```text
+Left:
+[0.0, 0.264, 0.548]
+
+Right:
+[0.0, -0.264, 0.548]
+```
+
+---
+
+## 10. Cooperative Transport Scene
+
+The cooperative transport scene is generated using:
+
+```text
+scripts/build_transport_scene.py
+```
+
+The generated model is:
+
+```text
+assets/models/dual_panda/transport_scene.xml
+```
+
+The scene contains:
+
+- Two Panda manipulators
+- A physical work table
+- A dynamic transport object
+- A transport-object center site
+- Left and right grasp reference sites
+- A goal region
+- A goal-center site
+
+---
+
+## 11. Work Table
+
+A physical work surface was added to prevent the transport object from falling to the floor.
+
+The table is approximately defined as:
+
+```xml
+<geom
+    name="work_table"
+    type="box"
+    pos="0.20 0 0.45"
+    size="0.90 0.42 0.05"
+    friction="1.0 0.005 0.0001"
+/>
+```
+
+The table top is therefore at approximately:
+
+```text
+z = 0.50 m
+```
+
+---
+
+## 12. Transport Object
+
+The transport object is currently represented as a dynamic box.
+
+Approximate parameters:
+
+```text
+Position:
+[0.0, 0.0, 0.56]
+
+Half-size:
+[0.20, 0.12, 0.06]
+
+Mass:
+2.0 kg
+
+Friction:
+1.0 0.005 0.0001
+```
+
+The object uses a free joint:
+
+```text
+object_freejoint
+```
+
+This gives the object six physical degrees of freedom.
+
+The complete transport model therefore has approximately:
+
+```text
+nq = 25
+nv = 24
+nu = 16
+```
+
+---
+
+## 13. Object and Goal Sites
+
+The transport object contains the following reference sites:
+
+```text
+object_center
+left_grasp_site
+right_grasp_site
+```
+
+Current approximate grasp-site positions in world coordinates at initialization are:
+
+```text
+left_grasp_site:
+[0.0, 0.13, 0.56]
+
+right_grasp_site:
+[0.0, -0.13, 0.56]
+```
+
+The goal is located in the positive X direction.
+
+Approximate goal center:
+
+```text
+[0.45, 0.0, 0.56]
+```
+
+The current grasp sites are reference points only. Final grasp geometry and grasp handles will be designed in a later development step.
+
+---
+
+## 14. Object Stability Validation
+
+Object settling was tested using:
+
+```text
+scripts/test_object_settling.py
+```
+
+The object settles at approximately:
+
+```text
+z = 0.5599 m
+```
+
+which is consistent with the intended center height of:
+
+```text
+z = 0.56 m
+```
+
+The final object velocities after settling were approximately on the order of:
+
+```text
+1e-14 to 1e-18
+```
+
+and can therefore be considered numerically zero.
+
+The initial transport-object placement is stable.
+
+When inspecting MuJoCo derived quantities immediately after creating `MjData`, `mujoco.mj_forward()` must be called before reading derived positions.
+
+---
+
+## 15. Initial Robot Configuration for IK
+
+Using the all-zero Panda joint configuration caused the first position-IK test to approach joint limits.
+
+In particular, Panda joints 4 and 6 were close to their limits.
+
+A bent nominal configuration was therefore selected:
+
+```python
+initial_q = np.array([
+    0.0,
+    -0.4,
+    0.0,
+    -1.8,
+    0.0,
+    1.4,
+    0.8,
+])
+```
+
+This configuration provides substantially better workspace for iterative inverse kinematics.
+
+---
+
+## 16. Position-Only Inverse Kinematics
+
+Position-only inverse kinematics was implemented using damped least squares.
+
+The target is an XYZ end-effector position.
+
+The update is based on the translational end-effector Jacobian.
+
+Conceptually:
+
+```text
+current end-effector position
+        |
+        v
+position error
+        |
+        v
+translational Jacobian
+        |
+        v
+damped least-squares solution
+        |
+        v
+joint update
+        |
+        v
+forward kinematics
+        |
+        v
+repeat until tolerance
+```
+
+The primary IK parameters used during validation were:
+
+```text
+Maximum iterations: 2000
+Position tolerance: 1e-4 m
+Damping: 0.05
+Step size: 0.2
+```
+
+---
+
+## 17. Left-Arm Position IK
+
+The initial left-arm approach target was defined as:
+
+```text
+[0.00, 0.21, 0.56]
+```
+
+This position lies outside the current left grasp reference point and acts as a safe approach location.
+
+The validated result was approximately:
+
+```text
+Final EE position:
+[0.000000, 0.210063, 0.560056]
+
+Final error:
+8.466e-05 m
+```
+
+This corresponds to approximately:
+
+```text
+0.085 mm
+```
+
+of Cartesian position error.
+
+The solver converged after approximately:
+
+```text
+29 iterations
+```
+
+The corresponding joint solution was approximately:
+
+```text
+joint1 =  0.00000
+joint2 = -0.30607
+joint3 =  0.00000
+joint4 = -1.80148
+joint5 =  0.00000
+joint6 =  1.45606
+joint7 =  0.80000
+```
+
+No joint was at its limit.
+
+---
+
+## 18. Right-Arm Position IK
+
+The mirrored right-arm target was:
+
+```text
+[0.00, -0.21, 0.56]
+```
+
+The validated result was approximately:
+
+```text
+Final EE position:
+[0.000000, -0.210063, 0.560056]
+
+Final error:
+8.466e-05 m
+```
+
+The solver again converged after approximately:
+
+```text
+29 iterations
+```
+
+Because the two Panda bases are mirrored in the world, the local joint solution is effectively identical to the left-arm solution.
+
+This validates the geometric symmetry of the dual-arm environment.
+
+---
+
+## 19. Dynamic Actuator Tracking
+
+Numerical IK modifies generalized coordinates directly and does not by itself demonstrate that the simulated actuators can physically track the resulting configuration.
+
+Therefore, the IK configurations were separately tested using the Panda actuators.
+
+Relevant scripts include:
+
+```text
+scripts/move_left_arm_to_approach.py
+scripts/move_right_arm_to_approach.py
+scripts/move_both_arms_to_approach.py
+```
+
+The tests confirmed:
+
+- Left-arm actuator tracking
+- Right-arm actuator tracking
+- Stationary opposite-arm behavior
+- Simultaneous dual-arm motion
+- Stable mirrored movement toward the transport object
+
+During simultaneous motion, the final end-effector positions were approximately:
+
+```text
+Left:
+[-0.00003, 0.20998, 0.55533]
+
+Right:
+[0.00003, -0.20998, 0.55533]
+```
+
+The small difference between the mathematical IK solution and dynamically tracked position is expected because the dynamic simulation uses physical actuators rather than direct `qpos` assignment.
+
+---
+
+## 20. Reusable IK Controller
+
+The position IK implementation was refactored into:
+
+```text
+src/controllers/ik_controller.py
+```
+
+The reusable position solver is:
+
+```python
+solve_position_ik(...)
+```
+
+It accepts:
+
+- MuJoCo model
+- MuJoCo data
+- Joint names
+- End-effector site name
+- Cartesian target position
+- Initial joint configuration
+- IK solver parameters
+
+It returns:
+
+- Joint-space IK solution
+- Final Cartesian position
+- Final Cartesian error
+
+The reusable solver was validated simultaneously for both robots using:
+
+```text
+scripts/test_dual_arm_ik.py
+```
+
+The reusable implementation reproduced the previous position-IK results.
+
+---
+
+## 21. End-Effector Orientation Inspection
+
+The end-effector rotation matrices were inspected using:
+
+```text
+scripts/inspect_ee_orientation.py
+```
+
+At the nominal initial configuration, the left end-effector orientation was approximately:
+
+```text
+[[-0.0146, -0.9999,  0.0000],
+ [-0.9999,  0.0146,  0.0000],
+ [ 0.0000,  0.0000, -1.0000]]
+```
+
+The right end-effector orientation was approximately:
+
+```text
+[[ 0.0146,  0.9999,  0.0000],
+ [ 0.9999, -0.0146,  0.0000],
+ [ 0.0000,  0.0000, -1.0000]]
+```
+
+The two orientations are approximately mirrored, consistent with the mirrored robot-base configuration.
+
+---
+
+## 22. Six-Dimensional Pose IK
+
+The reusable IK controller was extended with:
+
+```python
+solve_pose_ik(...)
+```
+
+This solver controls both:
+
+- End-effector XYZ position
+- End-effector orientation
+
+The pose solver uses both components of the MuJoCo site Jacobian:
+
+```text
+jacp
+```
+
+for translation and:
+
+```text
+jacr
+```
+
+for rotation.
+
+The combined Jacobian therefore represents a six-dimensional Cartesian pose objective.
+
+The Panda has seven arm joints, providing one redundant joint degree of freedom relative to the six-dimensional Cartesian task.
+
+---
+
+## 23. Pose-IK Validation
+
+The first pose-IK validation deliberately preserved each robot's nominal end-effector orientation while moving the end effector to its approach position.
+
+This separated validation of the pose solver from later grasp-orientation design.
+
+The test script is:
+
+```text
+scripts/test_dual_arm_pose_ik.py
+```
+
+### Left Arm
+
+Target:
+
+```text
+Position:
+[0.00, 0.21, 0.56]
+
+Orientation:
+nominal left end-effector orientation
+```
+
+Final position:
+
+```text
+[0.000000, 0.210066, 0.560073]
+```
+
+Position error:
+
+```text
+9.855e-05 m
+```
+
+Approximate joint solution:
+
+```text
+joint1 =  0.00000
+joint2 = -0.33368
+joint3 =  0.00000
+joint4 = -1.83626
+joint5 =  0.00000
+joint6 =  1.50257
+joint7 =  0.80000
+```
+
+### Right Arm
+
+Target:
+
+```text
+Position:
+[0.00, -0.21, 0.56]
+
+Orientation:
+nominal right end-effector orientation
+```
+
+Final position:
+
+```text
+[0.000000, -0.210066, 0.560073]
+```
+
+Position error:
+
+```text
+9.855e-05 m
+```
+
+The right-arm joint solution was effectively identical to the left-arm solution because of the symmetric robot placement.
+
+The remaining rotation-matrix differences were approximately on the order of:
+
+```text
+1e-05
+```
+
+demonstrating successful orientation preservation during Cartesian movement.
+
+---
+
+## 24. Current Validation Status
+
+The following components have been validated:
+
+- [x] MuJoCo installation
+- [x] Single Panda model
+- [x] Custom end-effector site
+- [x] Single-arm movement
+- [x] Dual-Panda model generation
+- [x] Mirrored dual-arm placement
+- [x] Independent left/right actuator control
+- [x] Dynamic transport object
+- [x] Stable work surface
+- [x] Stable initial object placement
+- [x] Object state access
+- [x] Object grasp reference sites
+- [x] Goal region
+- [x] Left position IK
+- [x] Right position IK
+- [x] Joint-limit handling
+- [x] Left dynamic IK tracking
+- [x] Right dynamic IK tracking
+- [x] Simultaneous dual-arm approach
+- [x] Reusable position IK controller
+- [x] End-effector orientation inspection
+- [x] Six-dimensional pose IK
+- [x] Mirrored dual-arm pose-IK validation
+
+---
+
+## 25. Current Development Boundary
+
+Development is currently complete through:
+
+```text
+Dual-arm 6D pose IK validation
+```
+
+The current pipeline is:
+
+```text
+MuJoCo setup
+    |
+    v
+Single Panda validation
+    |
+    v
+Dual-Panda environment
+    |
+    v
+Transport task scene
+    |
+    v
+Independent actuator control
+    |
+    v
+Position IK
+    |
+    v
+Dynamic IK tracking
+    |
+    v
+Simultaneous dual-arm approach
+    |
+    v
+Reusable IK controller
+    |
+    v
+6D pose IK
+    |
+    v
+GRASP DESIGN  <-- CURRENT NEXT STEP
+```
+
+---
+
+## 26. Next Development Steps
+
+The next development phase is cooperative grasping.
+
+The planned order is:
+
+1. Design grasp geometry suitable for the Panda grippers.
+2. Add grasp handles or graspable regions to opposite sides of the transport object.
+3. Position the left and right grasp sites relative to the new geometry.
+4. Determine the required left and right gripper orientations.
+5. Define safe pre-grasp poses.
+6. Solve 6D IK for the pre-grasp poses.
+7. Dynamically move both arms to pre-grasp.
+8. Move from pre-grasp to grasp.
+9. Control the Panda fingers.
+10. Validate stable dual-arm object contact.
+11. Lift or translate the object cooperatively.
+12. Develop the complete classical cooperative transport baseline.
+
+After the classical baseline is functional, development will proceed to:
+
+```text
+Gymnasium/MARL environment
+        |
+        v
+Observation and action spaces
+        |
+        v
+Reward design
+        |
+        v
+IPPO
+        |
+        v
+MAPPO
+        |
+        v
+Benchmark experiments
+        |
+        v
 Robustness experiments
-        ↓
-Analysis and report
+        |
+        v
+Analysis
 ```
 
 ---
 
-# 36. Reproducibility Rules
+## 27. Important Design Notes
 
-The following rules should be maintained throughout development:
+### IK Initialization
 
-1. Do not directly modify the original MuJoCo Menagerie models.
-2. Keep project-specific models in separate directories.
-3. Pin important dependency versions.
-4. Maintain `requirements.txt`.
-5. Avoid hard-coded absolute machine-specific paths.
-6. Store experiment parameters in configuration files when the experiment framework is introduced.
-7. Record random seeds for RL experiments.
-8. Save model checkpoints.
-9. Save evaluation results separately from training logs.
-10. Keep experiment scripts executable from the command line.
-11. Commit meaningful milestones to Git.
-12. Document major changes and design decisions.
-13. Keep the project transferable to university computing infrastructure.
+Do not use the all-zero Panda configuration as the default IK initialization.
+
+Use:
+
+```python
+initial_q = np.array([
+    0.0,
+    -0.4,
+    0.0,
+    -1.8,
+    0.0,
+    1.4,
+    0.8,
+])
+```
+
+unless a later task-specific nominal configuration replaces it.
+
+### Position vs Pose IK
+
+`solve_position_ik()` should remain available for tasks requiring only Cartesian position control.
+
+`solve_pose_ik()` should be used when both end-effector position and orientation matter, particularly during grasping.
+
+### Grasp Orientation
+
+The currently validated pose IK preserves the nominal wrist orientation.
+
+This should not automatically be treated as the final grasp orientation.
+
+The final grasp orientation must be selected based on:
+
+- Panda finger opening direction
+- Handle geometry
+- Object geometry
+- Collision avoidance
+- Stable force/contact configuration
+
+### Test Scripts
+
+Successful validation scripts should be preserved rather than overwritten.
+
+They provide regression tests and evidence of incremental development.
 
 ---
 
-# 37. Current Technical Checkpoint
+## 28. Current Project Structure
 
-At this checkpoint, the following pipeline has been demonstrated successfully:
+Relevant files currently include approximately:
 
 ```text
-Intel macOS development machine
-        ↓
-Python 3.11 virtual environment
-        ↓
-MuJoCo 3.8.1
-        ↓
-Physics simulation
-        ↓
-MuJoCo viewer
-        ↓
-Franka Panda model
-        ↓
-Joint/actuator inspection
-        ↓
-Single-joint control
-        ↓
-Seven-joint control
-        ↓
-Robot-state access
-        ↓
-End-effector Cartesian tracking
-        ↓
-Custom gripper-center site
+rnd-dual-arm-marl-benchmark/
+|
+|-- assets/
+|   `-- models/
+|       |-- custom_panda/
+|       |   |-- panda_with_site.xml
+|       |   `-- assets/
+|       |
+|       `-- dual_panda/
+|           |-- left_panda.xml
+|           |-- right_panda.xml
+|           |-- dual_arm_scene.xml
+|           `-- transport_scene.xml
+|
+|-- docs/
+|   `-- setup.md
+|
+|-- scripts/
+|   |-- create_dual_panda_models.py
+|   |-- build_dual_arm_scene.py
+|   |-- build_transport_scene.py
+|   |-- view_dual_arm_scene.py
+|   |-- inspect_dual_arm_scene.py
+|   |-- test_dual_arm_control.py
+|   |-- view_transport_scene.py
+|   |-- inspect_transport_scene.py
+|   |-- test_object_settling.py
+|   |-- test_left_arm_ik.py
+|   |-- test_right_arm_ik.py
+|   |-- move_left_arm_to_approach.py
+|   |-- move_right_arm_to_approach.py
+|   |-- move_both_arms_to_approach.py
+|   |-- test_dual_arm_ik.py
+|   |-- inspect_ee_orientation.py
+|   `-- test_dual_arm_pose_ik.py
+|
+`-- src/
+    `-- controllers/
+        `-- ik_controller.py
 ```
 
-This establishes the technical foundation required to begin development of the dual-arm cooperative transport environment.
+---
+
+## 29. Reproducibility
+
+Before running scripts, activate the virtual environment:
+
+```bash
+source .venv/bin/activate
+```
+
+Non-viewer scripts can normally be run using:
+
+```bash
+python scripts/<script_name>.py
+```
+
+Viewer scripts on macOS should be run using:
+
+```bash
+mjpython scripts/<script_name>.py
+```
+
+The transport scene can be regenerated using:
+
+```bash
+python scripts/build_transport_scene.py
+```
+
+The generated XML files should remain reproducible from the corresponding generation scripts rather than being edited manually wherever possible.
 
 ---
 
-# 38. Progress Log
+## 30. Current Checkpoint
 
-## Checkpoint 1 — MuJoCo Environment
+As of the current development checkpoint, both Panda robots can:
 
-Status: **Completed**
+- Exist simultaneously in the same MuJoCo environment.
+- Be actuated independently.
+- Move simultaneously.
+- Access their individual end-effector states.
+- Solve position-only inverse kinematics.
+- Solve full position-and-orientation inverse kinematics.
+- Reach mirrored approach positions around the transport object.
+- Preserve mirrored end-effector orientations during pose IK.
 
-MuJoCo was successfully installed and verified using a falling-box simulation.
+The next technical milestone is:
 
-## Checkpoint 2 — Single Panda Model
-
-Status: **Completed**
-
-The Franka Panda model was successfully imported from MuJoCo Menagerie and visualized.
-
-## Checkpoint 3 — Joint-Level Control
-
-Status: **Completed**
-
-Individual and simultaneous seven-joint position commands were successfully tested.
-
-## Checkpoint 4 — State Access
-
-Status: **Completed**
-
-Joint positions, joint velocities, controls, hand position, and hand orientation can be accessed programmatically.
-
-## Checkpoint 5 — End-Effector Reference
-
-Status: **Completed**
-
-A custom `ee_site` was created, visualized, and accessed programmatically.
-
-## Checkpoint 6 — Dual-Arm Environment
-
-Status: **Next**
-
-The next implementation stage is creation of a two-Panda custom scene for cooperative rigid-object transport.
-
----
-
-# 39. Important Current Design Decision
-
-The first cooperative transport benchmark will use a simple rigid box rather than a complex object.
-
-The purpose is to establish a stable and reproducible cooperative manipulation task before introducing additional complexity.
-
-A more complex object such as a table may be evaluated later if sufficient project time remains.
-
----
-
-# 40. Notes for Future Cluster Migration
-
-When moving training to university computing infrastructure:
-
-1. clone the GitHub repository;
-2. use a compatible Python version;
-3. create a fresh virtual/Conda environment;
-4. install dependencies from the project's dependency specification;
-5. verify the MuJoCo version;
-6. run non-rendered simulation tests;
-7. verify the RL framework separately;
-8. avoid requiring the interactive viewer for training;
-9. run a short smoke test before submitting long jobs;
-10. record cluster-specific setup separately from the core project environment.
-
-Training code should eventually support headless execution so that the simulation does not require an interactive graphical viewer on the cluster.
-
----
-
-# 41. Documentation Maintenance
-
-This document should be updated whenever a major milestone is completed.
-
-In particular, future sections should document:
-
-- dual-Panda model construction;
-- custom benchmark scene;
-- object model;
-- grasp configuration;
-- inverse-kinematics implementation;
-- classical controller;
-- Gymnasium/MARL interface;
-- observation definition;
-- action definition;
-- reward function;
-- termination conditions;
-- IPPO implementation;
-- MAPPO implementation;
-- training configuration;
-- evaluation protocol;
-- robustness experiments;
-- results;
-- known limitations;
-- cluster configuration.
-
-The purpose is for another researcher, supervisor, or future developer to understand not only how to run the final code, but also how the experimental system was constructed and why the major design decisions were made.
+> **Design and validate a physically meaningful dual-arm grasp of the transport object.**
