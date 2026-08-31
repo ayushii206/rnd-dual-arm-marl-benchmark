@@ -33,9 +33,12 @@ def prefix_model(source_path, output_path, prefix):
         "light",
         "key",
         "sensor",
-        "tendon",
 
-        # MuJoCo actuator element types
+        # Tendon types
+        "fixed",
+        "spatial",
+
+        # Actuator types
         "general",
         "motor",
         "position",
@@ -44,7 +47,7 @@ def prefix_model(source_path, output_path, prefix):
         "damper",
         "cylinder",
         "muscle",
-        "adhesion", 
+        "adhesion",
     }
 
     # First build a mapping from old names to new names.

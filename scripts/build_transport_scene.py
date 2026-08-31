@@ -62,9 +62,41 @@ ET.SubElement(
         "name": "transport_box_geom",
         "type": "box",
         "size": "0.20 0.12 0.06",
-        "mass": "2.0",
+        "mass": "1.90",
         "friction": "1.0 0.005 0.0001",
         "rgba": "0.2 0.5 0.8 1",
+    },
+)
+
+# ------------------------------------------------------------
+# Grasp handles
+# ------------------------------------------------------------
+
+ET.SubElement(
+    box,
+    "geom",
+    {
+        "name": "left_grasp_handle",
+        "type": "box",
+        "pos": "0 0.135 0",
+        "size": "0.025 0.015 0.020",
+        "mass": "0.05",
+        "friction": "1.5 0.005 0.0001",
+        "rgba": "0.95 0.55 0.15 1",
+    },
+)
+
+ET.SubElement(
+    box,
+    "geom",
+    {
+        "name": "right_grasp_handle",
+        "type": "box",
+        "pos": "0 -0.135 0",
+        "size": "0.025 0.015 0.020",
+        "mass": "0.05",
+        "friction": "1.5 0.005 0.0001",
+        "rgba": "0.95 0.55 0.15 1",
     },
 )
 
@@ -86,7 +118,7 @@ ET.SubElement(
     "site",
     {
         "name": "left_grasp_site",
-        "pos": "0 0.13 0",
+        "pos": "0 0.135 0",
         "size": "0.012",
         "rgba": "1 0 0 1",
     },
@@ -98,7 +130,7 @@ ET.SubElement(
     "site",
     {
         "name": "right_grasp_site",
-        "pos": "0 -0.13 0",
+        "pos": "0 -0.135 0",
         "size": "0.012",
         "rgba": "0 1 0 1",
     },
