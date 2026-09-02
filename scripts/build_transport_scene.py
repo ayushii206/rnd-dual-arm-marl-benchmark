@@ -270,7 +270,7 @@ ET.SubElement(
     {
         "name": "goal_region",
         "type": "box",
-        "pos": "0.45 0 0.505",
+        "pos": "0.42 0 0.505",
         "size": "0.22 0.15 0.005",
         "rgba": "0.2 1.0 0.2 0.30",
         "contype": "0",
@@ -283,7 +283,7 @@ ET.SubElement(
     "site",
     {
         "name": "goal_center",
-        "pos": "0.45 0 0.56",
+        "pos": "0.42 0 0.56",
         "size": "0.015",
         "rgba": "0 1 1 1",
     },
