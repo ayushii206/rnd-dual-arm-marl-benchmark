@@ -555,3 +555,280 @@ class ClassicalController:
         self,
     ):
         return self.phase
+
+    # ========================================================
+    # Reusable execution helpers
+    # ========================================================
+
+    def hold_pose(
+        self,
+        left_q,
+        right_q,
+        steps,
+        gripper_ctrl=None,
+        step_callback=None,
+    ):
+        """
+        Hold a dual-arm joint configuration for a fixed
+        number of MuJoCo simulation steps.
+
+        Parameters
+        ----------
+        left_q
+            Seven left-arm joint targets.
+
+        right_q
+            Seven right-arm joint targets.
+
+        steps
+            Number of physics steps.
+
+        gripper_ctrl
+            Optional gripper command. If None, the current
+            gripper command is preserved.
+
+        step_callback
+            Optional callable invoked after every physics
+            step. Useful for viewer synchronization or
+            benchmark metric collection.
+        """
+
+        for step_index in range(
+            steps
+        ):
+
+            if gripper_ctrl is not None:
+                self.set_grippers(
+                    gripper_ctrl
+                )
+
+            self.step(
+                left_q,
+                right_q,
+            )
+
+            if step_callback is not None:
+                step_callback(
+                    step_index
+                )
+
+
+    def execute_joint_trajectory(
+        self,
+        left_start_q,
+        right_start_q,
+        left_target_q,
+        right_target_q,
+        steps,
+        gripper_ctrl=None,
+        step_callback=None,
+    ):
+        """
+        Smoothly move both Panda arms between two
+        joint-space configurations.
+        """
+
+        for step_index in range(
+            steps
+        ):
+
+            raw_alpha = (
+                step_index + 1
+            ) / steps
+
+            left_q = (
+                (1.0 - raw_alpha)
+                * left_start_q
+                + raw_alpha
+                * left_target_q
+            )
+
+            right_q = (
+                (1.0 - raw_alpha)
+                * right_start_q
+                + raw_alpha
+                * right_target_q
+            )
+
+            if gripper_ctrl is not None:
+                self.set_grippers(
+                    gripper_ctrl
+                )
+
+            self.step(
+                left_q,
+                right_q,
+            )
+
+            if step_callback is not None:
+                step_callback(
+                    step_index
+                )
+
+
+    def execute_waypoint_trajectory(
+        self,
+        left_waypoints,
+        right_waypoints,
+        steps_per_segment,
+        gripper_ctrl=None,
+        step_callback=None,
+        smooth_interpolation=False,
+    ):
+        """
+        Execute synchronized left/right joint-space waypoint
+        trajectories.
+
+        Each consecutive waypoint pair is interpolated using
+        smoothstep to preserve the behaviour validated in the
+        original classical manipulation experiment.
+        """
+
+        if (
+            len(left_waypoints)
+            != len(right_waypoints)
+        ):
+            raise ValueError(
+                "Left and right waypoint lists must "
+                "have the same length."
+            )
+
+        if len(left_waypoints) < 2:
+            raise ValueError(
+                "At least two trajectory waypoints "
+                "are required."
+            )
+
+        global_step = 0
+
+        for segment_index in range(
+            len(left_waypoints) - 1
+        ):
+
+            left_start_q = (
+                left_waypoints[
+                    segment_index
+                ]
+            )
+
+            left_target_q = (
+                left_waypoints[
+                    segment_index + 1
+                ]
+            )
+
+            right_start_q = (
+                right_waypoints[
+                    segment_index
+                ]
+            )
+
+            right_target_q = (
+                right_waypoints[
+                    segment_index + 1
+                ]
+            )
+
+            for segment_step in range(
+                steps_per_segment
+            ):
+
+                raw_alpha = (
+                    segment_step + 1
+                ) / steps_per_segment
+
+                if smooth_interpolation:
+                    interpolation_alpha = (
+                        self.smoothstep(
+                            raw_alpha
+                        )
+                    )
+                else:
+                    interpolation_alpha = (
+                        raw_alpha
+                    )
+
+
+                left_q = (
+                    (1.0 - interpolation_alpha)
+                    * left_start_q
+                    + interpolation_alpha
+                    * left_target_q
+                )
+
+                right_q = (
+                    (1.0 - interpolation_alpha)
+                    * right_start_q
+                    + interpolation_alpha
+                    * right_target_q
+                )
+
+                if gripper_ctrl is not None:
+                    self.set_grippers(
+                        gripper_ctrl
+                    )
+
+                self.step(
+                    left_q,
+                    right_q,
+                )
+
+                if step_callback is not None:
+                    step_callback(
+                        global_step
+                    )
+
+                global_step += 1
+
+
+    def execute_gripper_transition(
+        self,
+        left_q,
+        right_q,
+        start_ctrl,
+        target_ctrl,
+        steps,
+        step_callback=None,
+    ):
+        """
+        Gradually change the gripper command while keeping
+        both arms fixed at their current task pose.
+
+        This reproduces the gradual release strategy that was
+        validated in the cooperative placement experiment.
+        """
+
+        for step_index in range(
+            steps
+        ):
+
+            raw_alpha = (
+                step_index + 1
+            ) / steps
+
+            alpha = self.smoothstep(
+                raw_alpha
+            )
+
+            gripper_ctrl = (
+                start_ctrl
+                + alpha
+                * (
+                    target_ctrl
+                    - start_ctrl
+                )
+            )
+
+            self.set_grippers(
+                gripper_ctrl
+            )
+
+            self.step(
+                left_q,
+                right_q,
+            )
+
+            if step_callback is not None:
+                step_callback(
+                    step_index
+                )
