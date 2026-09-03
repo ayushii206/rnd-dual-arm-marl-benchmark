@@ -119,7 +119,7 @@ RIGHT_LIFT_POSITION = np.array([
 # Therefore X = 0.420 m provides a useful margin from the
 # measured bilateral flat-placement IK boundary.
 
-PLACEMENT_X = 0.404
+PLACEMENT_X = 0.408
 
 # Maximum comfortable suspended flat-transport target.
 #
@@ -219,6 +219,109 @@ IK_ORIENTATION_TOLERANCE_DEG = 1.0
 OPEN_GRIPPER_CTRL = 255.0
 CLOSE_GRIPPER_CTRL = 0.0
 
+# ============================================================
+# Controlled release configuration
+# ============================================================
+
+# Gradually transition the gripper command from fully closed
+# to fully open while the arms remain at the validated
+# placement pose.
+#
+# A slow release allows the object's weight to transfer from
+# the finger contacts to the table without an abrupt impulse.
+
+RELEASE_STEPS = 3000
+
+RELEASE_LOG_INTERVAL = 250
+
+
+# After reaching the fully-open command, continue holding the
+# arm placement pose so that the released object can settle
+# naturally on the table.
+
+POST_RELEASE_HOLD_STEPS = 2000
+
+POST_RELEASE_LOG_INTERVAL = 250
+
+
+# Nominal object mass is 2.0 kg.
+OBJECT_WEIGHT_N = 2.0 * 9.81
+
+
+# Release acceptance thresholds.
+
+MIN_RELEASE_TABLE_SUPPORT_N = 18.0
+
+MAX_RELEASE_FINGER_VERTICAL_SUPPORT_N = 1.0
+
+MAX_RELEASE_FINGER_NORMAL_FORCE_N = 0.5
+
+MAX_RELEASE_LINEAR_VELOCITY_MPS = 0.01
+
+MAX_RELEASE_ANGULAR_VELOCITY_RADPS = 0.10
+
+MAX_RELEASE_ROLL_PITCH_DEG = 2.0
+
+# ============================================================
+# Arm retreat configuration
+# ============================================================
+
+# After successful release, move both fully-open grippers
+# laterally away from the object.
+#
+# This returns the end effectors toward the already validated
+# pregrasp lateral spacing:
+#
+#   left:  y = +0.145 -> +0.185 m
+#   right: y = -0.145 -> -0.185 m
+#
+# X and Z remain unchanged during this first retreat phase.
+
+RETREAT_Y = 0.185
+
+
+LEFT_RETREAT_POSITION = np.array([
+    PLACEMENT_X,
+    RETREAT_Y,
+    PLACEMENT_Z,
+])
+
+RIGHT_RETREAT_POSITION = np.array([
+    PLACEMENT_X,
+    -RETREAT_Y,
+    PLACEMENT_Z,
+])
+
+
+RETREAT_TRAJECTORY_WAYPOINTS = 21
+
+RETREAT_PHYSICS_STEPS_PER_WAYPOINT_SEGMENT = 100
+
+
+RETREAT_STEPS = (
+    (RETREAT_TRAJECTORY_WAYPOINTS - 1)
+    * RETREAT_PHYSICS_STEPS_PER_WAYPOINT_SEGMENT
+)
+
+
+POST_RETREAT_HOLD_STEPS = 1500
+
+RETREAT_LOG_INTERVAL = 200
+
+
+# Final whole-task acceptance thresholds.
+
+MAX_RETREAT_OBJECT_DISPLACEMENT_M = 0.005
+
+MAX_FINAL_LINEAR_VELOCITY_MPS = 0.01
+
+MAX_FINAL_ANGULAR_VELOCITY_RADPS = 0.10
+
+MAX_FINAL_ROLL_PITCH_DEG = 2.0
+
+MIN_FINAL_TABLE_SUPPORT_N = 18.0
+
+MAX_FINAL_FINGER_NORMAL_FORCE_N = 0.5
 
 # ============================================================
 # Names
@@ -2030,7 +2133,7 @@ print(
 
 print(
     "Final transport target X [m]:",
-    PLACEMENT_X,
+    TRANSPORT_X,
 )
 
 
@@ -2295,6 +2398,265 @@ print(
     "=" * 70
 )
 
+# ============================================================
+# Build outward arm-retreat trajectory
+# ============================================================
+
+print(
+    "\n"
+    + "=" * 70
+)
+
+print(
+    "BUILDING OUTWARD ARM-RETREAT TRAJECTORY"
+)
+
+print(
+    "=" * 70
+)
+
+
+left_retreat_trajectory_q = [
+    left_placement_q.copy()
+]
+
+right_retreat_trajectory_q = [
+    right_placement_q.copy()
+]
+
+
+previous_left_q = (
+    left_placement_q.copy()
+)
+
+previous_right_q = (
+    right_placement_q.copy()
+)
+
+
+retreat_trajectory_valid = True
+
+
+for waypoint_index in range(
+    1,
+    RETREAT_TRAJECTORY_WAYPOINTS,
+):
+
+    raw_alpha = (
+        waypoint_index
+        / (
+            RETREAT_TRAJECTORY_WAYPOINTS
+            - 1
+        )
+    )
+
+
+    trajectory_alpha = smoothstep(
+        raw_alpha
+    )
+
+
+    current_left_y = (
+        LEFT_PLACEMENT_POSITION[1]
+        + (
+            LEFT_RETREAT_POSITION[1]
+            - LEFT_PLACEMENT_POSITION[1]
+        )
+        * trajectory_alpha
+    )
+
+
+    current_right_y = (
+        RIGHT_PLACEMENT_POSITION[1]
+        + (
+            RIGHT_RETREAT_POSITION[1]
+            - RIGHT_PLACEMENT_POSITION[1]
+        )
+        * trajectory_alpha
+    )
+
+
+    left_target_position = np.array([
+        PLACEMENT_X,
+        current_left_y,
+        PLACEMENT_Z,
+    ])
+
+
+    right_target_position = np.array([
+        PLACEMENT_X,
+        current_right_y,
+        PLACEMENT_Z,
+    ])
+
+
+    (
+        left_waypoint_q,
+        left_achieved_position,
+        left_achieved_rotation,
+    ) = solve_pose_ik(
+        model=model,
+        data=data,
+        joint_names=left_joint_names,
+        site_name="left_ee_site",
+        target_position=left_target_position,
+        target_rotation=left_target_rotation,
+        initial_q=previous_left_q,
+    )
+
+
+    (
+        right_waypoint_q,
+        right_achieved_position,
+        right_achieved_rotation,
+    ) = solve_pose_ik(
+        model=model,
+        data=data,
+        joint_names=right_joint_names,
+        site_name="right_ee_site",
+        target_position=right_target_position,
+        target_rotation=right_target_rotation,
+        initial_q=previous_right_q,
+    )
+
+
+    left_position_error = float(
+        np.linalg.norm(
+            left_achieved_position
+            - left_target_position
+        )
+    )
+
+
+    right_position_error = float(
+        np.linalg.norm(
+            right_achieved_position
+            - right_target_position
+        )
+    )
+
+
+    left_orientation_error = (
+        orientation_error_deg(
+            left_target_rotation,
+            left_achieved_rotation,
+        )
+    )
+
+
+    right_orientation_error = (
+        orientation_error_deg(
+            right_target_rotation,
+            right_achieved_rotation,
+        )
+    )
+
+
+    max_position_error = max(
+        left_position_error,
+        right_position_error,
+    )
+
+
+    max_orientation_error = max(
+        left_orientation_error,
+        right_orientation_error,
+    )
+
+
+    waypoint_pass = all([
+        max_position_error
+        <= IK_POSITION_TOLERANCE_M,
+
+        max_orientation_error
+        <= IK_ORIENTATION_TOLERANCE_DEG,
+    ])
+
+
+    print(
+        f"Retreat waypoint "
+        f"{waypoint_index:02d}/"
+        f"{RETREAT_TRAJECTORY_WAYPOINTS - 1:02d}"
+        f" | left_y={current_left_y:+.4f} m"
+        f" | right_y={current_right_y:+.4f} m"
+        f" | pos={max_position_error * 1000.0:.3f} mm"
+        f" | ori={max_orientation_error:.4f} deg"
+        f" | PASS={waypoint_pass}"
+    )
+
+
+    if not waypoint_pass:
+
+        retreat_trajectory_valid = False
+
+        break
+
+
+    left_retreat_trajectory_q.append(
+        left_waypoint_q.copy()
+    )
+
+    right_retreat_trajectory_q.append(
+        right_waypoint_q.copy()
+    )
+
+
+    previous_left_q = (
+        left_waypoint_q.copy()
+    )
+
+    previous_right_q = (
+        right_waypoint_q.copy()
+    )
+
+
+if not retreat_trajectory_valid:
+
+    raise RuntimeError(
+        "Outward retreat trajectory failed IK validation. "
+        "Dynamic execution was NOT started."
+    )
+
+
+if (
+    len(left_retreat_trajectory_q)
+    != RETREAT_TRAJECTORY_WAYPOINTS
+    or len(right_retreat_trajectory_q)
+    != RETREAT_TRAJECTORY_WAYPOINTS
+):
+
+    raise RuntimeError(
+        "Retreat trajectory contains an unexpected "
+        "number of waypoints."
+    )
+
+
+left_retreat_q = (
+    left_retreat_trajectory_q[-1].copy()
+)
+
+right_retreat_q = (
+    right_retreat_trajectory_q[-1].copy()
+)
+
+
+print(
+    "\nOutward retreat trajectory: PASS"
+)
+
+print(
+    "Left retreat target:",
+    LEFT_RETREAT_POSITION,
+)
+
+print(
+    "Right retreat target:",
+    RIGHT_RETREAT_POSITION,
+)
+
+print(
+    "=" * 70
+)
 
  #============================================================
 # Reset simulation after IK
@@ -4438,6 +4800,11 @@ with mujoco.viewer.launch_passive(
             "Do NOT proceed to gripper release yet. "
             "Inspect the failed placement criterion above."
         )
+        
+        raise RuntimeError(
+            "Flat placement failed. "
+            "Gripper release was NOT started."
+        )
 
 
     print(
@@ -4445,13 +4812,1142 @@ with mujoco.viewer.launch_passive(
     )
 
     # ========================================================
-    # Keep viewer open briefly
+    # Controlled cooperative release
     # ========================================================
 
     print(
-        "\nHolding final placed configuration..."
+        "\n"
+        + "=" * 70
     )
 
+    print(
+        "STARTING CONTROLLED GRIPPER RELEASE"
+    )
+
+    print(
+        "=" * 70
+    )
+
+    print(
+        "Release steps:",
+        RELEASE_STEPS,
+    )
+
+    print(
+        "Initial gripper ctrl:",
+        CLOSE_GRIPPER_CTRL,
+    )
+
+    print(
+        "Final gripper ctrl:",
+        OPEN_GRIPPER_CTRL,
+    )
+
+    print(
+        "\n"
+        "step | progress | gripper_ctrl | "
+        "object_x | object_y | object_z | "
+        "finger_Fz | table_Fz | contacts"
+    )
+
+    print(
+        "-" * 110
+    )
+
+
+    release_initial_position, _, _, _ = (
+        object_state()
+    )
+
+
+    max_release_table_fz = 0.0
+
+    max_release_finger_fz = 0.0
+
+    min_release_finger_fz = np.inf
+
+    first_full_table_support_step = None
+
+    first_zero_finger_contact_step = None
+
+
+    for release_step in range(
+        RELEASE_STEPS
+    ):
+
+        raw_alpha = (
+            release_step + 1
+        ) / RELEASE_STEPS
+
+
+        release_alpha = smoothstep(
+            raw_alpha
+        )
+
+
+        gripper_ctrl = (
+            CLOSE_GRIPPER_CTRL
+            + release_alpha
+            * (
+                OPEN_GRIPPER_CTRL
+                - CLOSE_GRIPPER_CTRL
+            )
+        )
+
+
+        data.ctrl[
+            left_gripper_actuator_id
+        ] = gripper_ctrl
+
+        data.ctrl[
+            right_gripper_actuator_id
+        ] = gripper_ctrl
+
+
+        # Do NOT move the arms during release.
+        #
+        # The only intentional change here is the gripper
+        # opening command. This isolates the load-transfer
+        # behaviour from any subsequent retreat motion.
+
+        step_with_arm_targets(
+            left_placement_q,
+            right_placement_q,
+        )
+
+        viewer.sync()
+
+
+        (
+            finger_fz,
+            table_fz,
+            finger_normal_sum,
+            finger_contact_count,
+        ) = get_object_support_forces()
+
+
+        object_x = float(
+            data.site_xpos[
+                object_center_site_id,
+                0,
+            ]
+        )
+
+        object_y = float(
+            data.site_xpos[
+                object_center_site_id,
+                1,
+            ]
+        )
+
+        object_z = float(
+            data.site_xpos[
+                object_center_site_id,
+                2,
+            ]
+        )
+
+
+        max_release_table_fz = max(
+            max_release_table_fz,
+            table_fz,
+        )
+
+        max_release_finger_fz = max(
+            max_release_finger_fz,
+            finger_fz,
+        )
+
+        min_release_finger_fz = min(
+            min_release_finger_fz,
+            finger_fz,
+        )
+
+
+        if (
+            first_full_table_support_step
+            is None
+            and table_fz
+            >= MIN_RELEASE_TABLE_SUPPORT_N
+        ):
+
+            first_full_table_support_step = (
+                release_step + 1
+            )
+
+
+        if (
+            first_zero_finger_contact_step
+            is None
+            and finger_contact_count == 0
+        ):
+
+            first_zero_finger_contact_step = (
+                release_step + 1
+            )
+
+
+        if (
+            release_step == 0
+            or (
+                release_step + 1
+            ) % RELEASE_LOG_INTERVAL == 0
+            or release_step
+            == RELEASE_STEPS - 1
+        ):
+
+            print(
+                f"{release_step + 1:4d} | "
+                f"{raw_alpha:8.4f} | "
+                f"{gripper_ctrl:12.4f} | "
+                f"{object_x:+9.6f} | "
+                f"{object_y:+9.6f} | "
+                f"{object_z:+9.6f} | "
+                f"{finger_fz:+9.4f} | "
+                f"{table_fz:+9.4f} | "
+                f"{finger_contact_count:3d}"
+            )
+
+
+    # ========================================================
+    # Hold after full release
+    # ========================================================
+
+    print(
+        "\nGrippers reached fully-open command."
+    )
+
+    print(
+        "Holding released object for stabilization..."
+    )
+
+
+    for hold_step in range(
+        POST_RELEASE_HOLD_STEPS
+    ):
+
+        data.ctrl[
+            left_gripper_actuator_id
+        ] = OPEN_GRIPPER_CTRL
+
+        data.ctrl[
+            right_gripper_actuator_id
+        ] = OPEN_GRIPPER_CTRL
+
+
+        step_with_arm_targets(
+            left_placement_q,
+            right_placement_q,
+        )
+
+        viewer.sync()
+
+
+        (
+            finger_fz,
+            table_fz,
+            finger_normal_sum,
+            finger_contact_count,
+        ) = get_object_support_forces()
+        
+        if (
+            first_full_table_support_step is None
+            and table_fz >= MIN_RELEASE_TABLE_SUPPORT_N
+        ):
+
+            first_full_table_support_step = (
+                RELEASE_STEPS
+                + hold_step
+                + 1
+            )
+            
+        if (
+            first_zero_finger_contact_step is None
+            and finger_contact_count == 0
+        ):
+
+            first_zero_finger_contact_step = (
+                RELEASE_STEPS
+                + hold_step
+                + 1
+            )
+
+
+        if (
+            hold_step == 0
+            or (
+                hold_step + 1
+            ) % POST_RELEASE_LOG_INTERVAL == 0
+            or hold_step
+            == POST_RELEASE_HOLD_STEPS - 1
+        ):
+
+            object_x = float(
+                data.site_xpos[
+                    object_center_site_id,
+                    0,
+                ]
+            )
+
+            object_y = float(
+                data.site_xpos[
+                    object_center_site_id,
+                    1,
+                ]
+            )
+
+            object_z = float(
+                data.site_xpos[
+                    object_center_site_id,
+                    2,
+                ]
+            )
+
+
+            print(
+                f"hold {hold_step + 1:4d}"
+                f" | x={object_x:+.6f}"
+                f" | y={object_y:+.6f}"
+                f" | z={object_z:+.6f}"
+                f" | finger_Fz={finger_fz:+.4f}"
+                f" | table_Fz={table_fz:+.4f}"
+                f" | contacts={finger_contact_count}"
+            )
+
+
+    # ========================================================
+    # Final released-object diagnostics
+    # ========================================================
+
+    mujoco.mj_forward(
+        model,
+        data,
+    )
+
+
+    (
+        object_position_after_release,
+        object_rotation_after_release,
+        object_linear_velocity_after_release,
+        object_angular_velocity_after_release,
+    ) = object_state()
+
+
+    object_rpy_after_release = (
+        rotation_matrix_to_rpy(
+            object_rotation_after_release
+        )
+    )
+
+
+    (
+        released_finger_fz,
+        released_table_fz,
+        released_finger_normal_sum,
+        released_finger_contact_count,
+    ) = get_object_support_forces()
+
+
+    print_object_state(
+        "FINAL OBJECT STATE AFTER RELEASE"
+    )
+
+
+    print_object_contacts(
+        "FINAL CONTACTS AFTER RELEASE"
+    )
+
+
+    print_finger_joint_positions()
+
+
+    print_gripper_actuator_state(
+        "FULLY RELEASED GRIPPER ACTUATOR STATE"
+    )
+
+
+    # ========================================================
+    # Release acceptance criteria
+    # ========================================================
+
+    released_goal_x_pass = (
+        abs(
+            object_position_after_release[0]
+            - GOAL_CENTER_X
+        )
+        <= GOAL_X_CENTER_TOLERANCE
+    )
+
+
+    released_goal_y_pass = (
+        abs(
+            object_position_after_release[1]
+            - GOAL_CENTER_Y
+        )
+        <= GOAL_Y_CENTER_TOLERANCE
+    )
+
+
+    released_table_support_pass = (
+        released_table_fz
+        >= MIN_RELEASE_TABLE_SUPPORT_N
+    )
+
+
+    released_finger_support_pass = (
+        abs(
+            released_finger_fz
+        )
+        <= MAX_RELEASE_FINGER_VERTICAL_SUPPORT_N
+    )
+
+
+    released_finger_contact_pass = (
+        released_finger_normal_sum
+        <= MAX_RELEASE_FINGER_NORMAL_FORCE_N
+    )
+
+
+    released_linear_velocity_pass = (
+        np.linalg.norm(
+            object_linear_velocity_after_release
+        )
+        <= MAX_RELEASE_LINEAR_VELOCITY_MPS
+    )
+
+
+    released_angular_velocity_pass = (
+        np.linalg.norm(
+            object_angular_velocity_after_release
+        )
+        <= MAX_RELEASE_ANGULAR_VELOCITY_RADPS
+    )
+
+
+    released_roll_pitch_pass = all([
+        abs(
+            np.degrees(
+                object_rpy_after_release[0]
+            )
+        )
+        <= MAX_RELEASE_ROLL_PITCH_DEG,
+
+        abs(
+            np.degrees(
+                object_rpy_after_release[1]
+            )
+        )
+        <= MAX_RELEASE_ROLL_PITCH_DEG,
+    ])
+
+
+    release_pass = all([
+        released_goal_x_pass,
+        released_goal_y_pass,
+        released_table_support_pass,
+        released_finger_support_pass,
+        released_finger_contact_pass,
+        released_linear_velocity_pass,
+        released_angular_velocity_pass,
+        released_roll_pitch_pass,
+    ])
+
+
+    print(
+        "\n"
+        + "=" * 70
+    )
+
+    print(
+        "GRIPPER RELEASE RESULT"
+    )
+
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        "Object position before release:",
+        release_initial_position,
+    )
+
+    print(
+        "Object position after release:",
+        object_position_after_release,
+    )
+
+    print(
+        "Object displacement during release [m]:",
+        object_position_after_release
+        - release_initial_position,
+    )
+
+
+    print(
+        "\nLoad transfer:"
+    )
+
+    print(
+        "Object nominal weight [N]:",
+        OBJECT_WEIGHT_N,
+    )
+
+    print(
+        "Final table vertical support [N]:",
+        released_table_fz,
+    )
+
+    print(
+        "Final finger vertical support [N]:",
+        released_finger_fz,
+    )
+
+    print(
+        "Final finger normal force sum [N]:",
+        released_finger_normal_sum,
+    )
+
+    print(
+        "Final finger contact count:",
+        released_finger_contact_count,
+    )
+
+    print(
+        "First step with table support >=",
+        MIN_RELEASE_TABLE_SUPPORT_N,
+        "N:",
+        first_full_table_support_step,
+    )
+
+    print(
+        "First step with zero finger contacts:",
+        first_zero_finger_contact_step,
+    )
+
+
+    print(
+        "\nRelease checks:"
+    )
+
+    print(
+        "Object remains inside goal X:",
+        released_goal_x_pass,
+    )
+
+    print(
+        "Object remains inside goal Y:",
+        released_goal_y_pass,
+    )
+
+    print(
+        "Table support >=",
+        MIN_RELEASE_TABLE_SUPPORT_N,
+        "N:",
+        released_table_support_pass,
+    )
+
+    print(
+        "|Finger vertical support| <=",
+        MAX_RELEASE_FINGER_VERTICAL_SUPPORT_N,
+        "N:",
+        released_finger_support_pass,
+    )
+
+    print(
+        "Residual finger normal force <=",
+        MAX_RELEASE_FINGER_NORMAL_FORCE_N,
+        "N:",
+        released_finger_contact_pass,
+    )
+
+    print(
+        "Linear velocity norm <=",
+        MAX_RELEASE_LINEAR_VELOCITY_MPS,
+        "m/s:",
+        released_linear_velocity_pass,
+    )
+
+    print(
+        "Angular velocity norm <=",
+        MAX_RELEASE_ANGULAR_VELOCITY_RADPS,
+        "rad/s:",
+        released_angular_velocity_pass,
+    )
+
+    print(
+        "|roll| and |pitch| <=",
+        MAX_RELEASE_ROLL_PITCH_DEG,
+        "deg:",
+        released_roll_pitch_pass,
+    )
+
+
+    if release_pass:
+
+        print(
+            "\nRESULT: PASS"
+        )
+
+        print(
+            "Stable cooperative release validated. "
+            "The object is fully supported by the table "
+            "and remains inside the goal region."
+        )
+
+    else:
+
+        print(
+            "\nRESULT: FAIL"
+        )
+
+        raise RuntimeError(
+            "Controlled gripper release failed. "
+            "Arm retreat was NOT started."
+        )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    # ========================================================
+    # Dynamic outward arm retreat
+    # ========================================================
+
+    print(
+        "\n"
+        + "=" * 70
+    )
+
+    print(
+        "STARTING OUTWARD ARM RETREAT"
+    )
+
+    print(
+        "=" * 70
+    )
+
+
+    object_position_before_retreat, _, _, _ = (
+        object_state()
+    )
+
+
+    max_retreat_object_displacement = 0.0
+
+    max_retreat_finger_normal_force = 0.0
+
+
+    print(
+        "\n"
+        "step | left_y | right_y | "
+        "object_x | object_y | object_z | "
+        "disp_mm | table_Fz | finger_N"
+    )
+
+    print(
+        "-" * 115
+    )
+
+
+    retreat_step_counter = 0
+
+
+    for segment_index in range(
+        RETREAT_TRAJECTORY_WAYPOINTS - 1
+    ):
+
+        left_start_q = (
+            left_retreat_trajectory_q[
+                segment_index
+            ]
+        )
+
+        left_target_q = (
+            left_retreat_trajectory_q[
+                segment_index + 1
+            ]
+        )
+
+
+        right_start_q = (
+            right_retreat_trajectory_q[
+                segment_index
+            ]
+        )
+
+        right_target_q = (
+            right_retreat_trajectory_q[
+                segment_index + 1
+            ]
+        )
+
+
+        for local_step in range(
+            RETREAT_PHYSICS_STEPS_PER_WAYPOINT_SEGMENT
+        ):
+
+            retreat_step_counter += 1
+
+
+            raw_alpha = (
+                local_step + 1
+            ) / RETREAT_PHYSICS_STEPS_PER_WAYPOINT_SEGMENT
+
+
+            interpolation_alpha = smoothstep(
+                raw_alpha
+            )
+
+
+            left_current_q = (
+                left_start_q
+                + interpolation_alpha
+                * (
+                    left_target_q
+                    - left_start_q
+                )
+            )
+
+
+            right_current_q = (
+                right_start_q
+                + interpolation_alpha
+                * (
+                    right_target_q
+                    - right_start_q
+                )
+            )
+
+
+            data.ctrl[
+                left_gripper_actuator_id
+            ] = OPEN_GRIPPER_CTRL
+
+            data.ctrl[
+                right_gripper_actuator_id
+            ] = OPEN_GRIPPER_CTRL
+
+
+            step_with_arm_targets(
+                left_current_q,
+                right_current_q,
+            )
+
+            viewer.sync()
+
+
+            (
+                current_object_position,
+                _,
+                _,
+                _,
+            ) = object_state()
+
+
+            (
+                finger_fz,
+                table_fz,
+                finger_normal_sum,
+                finger_contact_count,
+            ) = get_object_support_forces()
+
+
+            current_displacement = float(
+                np.linalg.norm(
+                    current_object_position
+                    - object_position_before_retreat
+                )
+            )
+
+
+            max_retreat_object_displacement = max(
+                max_retreat_object_displacement,
+                current_displacement,
+            )
+
+
+            max_retreat_finger_normal_force = max(
+                max_retreat_finger_normal_force,
+                finger_normal_sum,
+            )
+
+
+            if (
+                retreat_step_counter == 1
+                or retreat_step_counter
+                % RETREAT_LOG_INTERVAL == 0
+                or retreat_step_counter
+                == RETREAT_STEPS
+            ):
+
+                left_y_estimate = (
+                    LEFT_PLACEMENT_POSITION[1]
+                    + (
+                        LEFT_RETREAT_POSITION[1]
+                        - LEFT_PLACEMENT_POSITION[1]
+                    )
+                    * (
+                        retreat_step_counter
+                        / RETREAT_STEPS
+                    )
+                )
+
+
+                right_y_estimate = (
+                    RIGHT_PLACEMENT_POSITION[1]
+                    + (
+                        RIGHT_RETREAT_POSITION[1]
+                        - RIGHT_PLACEMENT_POSITION[1]
+                    )
+                    * (
+                        retreat_step_counter
+                        / RETREAT_STEPS
+                    )
+                )
+
+
+                print(
+                    f"{retreat_step_counter:4d}"
+                    f" | {left_y_estimate:+.4f}"
+                    f" | {right_y_estimate:+.4f}"
+                    f" | {current_object_position[0]:+.6f}"
+                    f" | {current_object_position[1]:+.6f}"
+                    f" | {current_object_position[2]:+.6f}"
+                    f" | {current_displacement * 1000.0:7.3f}"
+                    f" | {table_fz:+9.4f}"
+                    f" | {finger_normal_sum:+8.4f}"
+                )
+
+
+    # ========================================================
+    # Hold after retreat
+    # ========================================================
+
+    print(
+        "\nOutward retreat completed."
+    )
+
+    print(
+        "Holding final retreated arm configuration..."
+    )
+
+
+    for hold_step in range(
+        POST_RETREAT_HOLD_STEPS
+    ):
+
+        data.ctrl[
+            left_gripper_actuator_id
+        ] = OPEN_GRIPPER_CTRL
+
+        data.ctrl[
+            right_gripper_actuator_id
+        ] = OPEN_GRIPPER_CTRL
+
+
+        step_with_arm_targets(
+            left_retreat_q,
+            right_retreat_q,
+        )
+
+        viewer.sync()
+
+
+    # ========================================================
+    # Final complete-task diagnostics
+    # ========================================================
+
+    mujoco.mj_forward(
+        model,
+        data,
+    )
+
+
+    (
+        final_object_position,
+        final_object_rotation,
+        final_object_linear_velocity,
+        final_object_angular_velocity,
+    ) = object_state()
+
+
+    final_object_rpy = (
+        rotation_matrix_to_rpy(
+            final_object_rotation
+        )
+    )
+
+
+    (
+        final_finger_fz,
+        final_table_fz,
+        final_finger_normal_sum,
+        final_finger_contact_count,
+    ) = get_object_support_forces()
+
+
+    final_object_displacement = float(
+        np.linalg.norm(
+            final_object_position
+            - object_position_before_retreat
+        )
+    )
+
+
+    print_object_state(
+        "FINAL OBJECT STATE AFTER ARM RETREAT"
+    )
+
+
+    print_object_contacts(
+        "FINAL CONTACTS AFTER ARM RETREAT"
+    )
+
+
+    print_finger_joint_positions()
+
+
+    print_gripper_actuator_state(
+        "FINAL OPEN GRIPPER ACTUATOR STATE"
+    )
+
+
+    # ========================================================
+    # Final task success criteria
+    # ========================================================
+
+    final_goal_x_pass = (
+        abs(
+            final_object_position[0]
+            - GOAL_CENTER_X
+        )
+        <= GOAL_X_CENTER_TOLERANCE
+    )
+
+
+    final_goal_y_pass = (
+        abs(
+            final_object_position[1]
+            - GOAL_CENTER_Y
+        )
+        <= GOAL_Y_CENTER_TOLERANCE
+    )
+
+
+    final_table_support_pass = (
+        final_table_fz
+        >= MIN_FINAL_TABLE_SUPPORT_N
+    )
+
+
+    final_finger_contact_pass = (
+        final_finger_normal_sum
+        <= MAX_FINAL_FINGER_NORMAL_FORCE_N
+    )
+
+
+    final_linear_velocity_pass = (
+        np.linalg.norm(
+            final_object_linear_velocity
+        )
+        <= MAX_FINAL_LINEAR_VELOCITY_MPS
+    )
+
+
+    final_angular_velocity_pass = (
+        np.linalg.norm(
+            final_object_angular_velocity
+        )
+        <= MAX_FINAL_ANGULAR_VELOCITY_RADPS
+    )
+
+
+    final_roll_pitch_pass = all([
+        abs(
+            np.degrees(
+                final_object_rpy[0]
+            )
+        )
+        <= MAX_FINAL_ROLL_PITCH_DEG,
+
+        abs(
+            np.degrees(
+                final_object_rpy[1]
+            )
+        )
+        <= MAX_FINAL_ROLL_PITCH_DEG,
+    ])
+
+
+    final_retreat_displacement_pass = (
+        final_object_displacement
+        <= MAX_RETREAT_OBJECT_DISPLACEMENT_M
+    )
+
+
+    complete_task_pass = all([
+        final_goal_x_pass,
+        final_goal_y_pass,
+        final_table_support_pass,
+        final_finger_contact_pass,
+        final_linear_velocity_pass,
+        final_angular_velocity_pass,
+        final_roll_pitch_pass,
+        final_retreat_displacement_pass,
+    ])
+
+
+    print(
+        "\n"
+        + "=" * 70
+    )
+
+    print(
+        "FINAL COMPLETE-TASK RESULT"
+    )
+
+    print(
+        "=" * 70
+    )
+
+
+    print(
+        "Object position before retreat:",
+        object_position_before_retreat,
+    )
+
+    print(
+        "Object position after retreat:",
+        final_object_position,
+    )
+
+    print(
+        "Final object displacement during retreat [m]:",
+        final_object_displacement,
+    )
+
+    print(
+        "Maximum observed displacement during retreat [m]:",
+        max_retreat_object_displacement,
+    )
+
+
+    print(
+        "\nFinal support/contact state:"
+    )
+
+    print(
+        "Table vertical support [N]:",
+        final_table_fz,
+    )
+
+    print(
+        "Finger vertical support [N]:",
+        final_finger_fz,
+    )
+
+    print(
+        "Finger normal force sum [N]:",
+        final_finger_normal_sum,
+    )
+
+    print(
+        "Finger contact count:",
+        final_finger_contact_count,
+    )
+
+
+    print(
+        "\nFinal checks:"
+    )
+
+    print(
+        "Object inside goal X:",
+        final_goal_x_pass,
+    )
+
+    print(
+        "Object inside goal Y:",
+        final_goal_y_pass,
+    )
+
+    print(
+        "Table support >=",
+        MIN_FINAL_TABLE_SUPPORT_N,
+        "N:",
+        final_table_support_pass,
+    )
+
+    print(
+        "Residual finger normal force <=",
+        MAX_FINAL_FINGER_NORMAL_FORCE_N,
+        "N:",
+        final_finger_contact_pass,
+    )
+
+    print(
+        "Linear velocity norm <=",
+        MAX_FINAL_LINEAR_VELOCITY_MPS,
+        "m/s:",
+        final_linear_velocity_pass,
+    )
+
+    print(
+        "Angular velocity norm <=",
+        MAX_FINAL_ANGULAR_VELOCITY_RADPS,
+        "rad/s:",
+        final_angular_velocity_pass,
+    )
+
+    print(
+        "|roll| and |pitch| <=",
+        MAX_FINAL_ROLL_PITCH_DEG,
+        "deg:",
+        final_roll_pitch_pass,
+    )
+
+    print(
+        "Object displacement during retreat <=",
+        MAX_RETREAT_OBJECT_DISPLACEMENT_M,
+        "m:",
+        final_retreat_displacement_pass,
+    )
+
+
+    if complete_task_pass:
+
+        print(
+            "\nCOMPLETE CLASSICAL TASK: PASS"
+        )
+
+        print(
+            "The object was cooperatively grasped, lifted, "
+            "transported, placed, released, and the arms "
+            "retreated without disturbing the final goal state."
+        )
+
+    else:
+
+        print(
+            "\nCOMPLETE CLASSICAL TASK: FAIL"
+        )
+
+        raise RuntimeError(
+            "Final complete-task acceptance criteria failed."
+        )
+
+
+    print(
+        "=" * 70
+    )
+
+
+    # ========================================================
+    # Keep final successful state visible briefly
+    # ========================================================
 
     for _ in range(
         2000
@@ -4459,15 +5955,16 @@ with mujoco.viewer.launch_passive(
 
         data.ctrl[
             left_gripper_actuator_id
-        ] = CLOSE_GRIPPER_CTRL
+        ] = OPEN_GRIPPER_CTRL
 
         data.ctrl[
             right_gripper_actuator_id
-        ] = CLOSE_GRIPPER_CTRL
+        ] = OPEN_GRIPPER_CTRL
+
 
         step_with_arm_targets(
-            left_placement_q,
-            right_placement_q,
+            left_retreat_q,
+            right_retreat_q,
         )
 
         viewer.sync()
