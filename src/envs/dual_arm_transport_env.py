@@ -72,6 +72,16 @@ RIGHT_LIFT_POSITION = np.array([
 ])
 
 
+# ============================================================
+# MARL suspended-transport target
+# ============================================================
+
+TRANSPORT_TARGET_POSITION = np.array([
+    0.380,
+    0.0,
+    0.580,
+])
+
 LEFT_EE_SITE_NAME = "left_ee_site"
 RIGHT_EE_SITE_NAME = "right_ee_site"
 
@@ -144,6 +154,18 @@ class DualArmTransportEnv:
             self.controller.right_joint_names
         )
 
+        self.left_dof_ids = (
+            self._get_joint_dof_ids(
+                self.left_joint_names
+            )
+        )
+
+        self.right_dof_ids = (
+            self._get_joint_dof_ids(
+                self.right_joint_names
+            )
+        )
+
         self.left_ee_site_id = mujoco.mj_name2id(
             self.model,
             mujoco.mjtObj.mjOBJ_SITE,
@@ -156,6 +178,12 @@ class DualArmTransportEnv:
             RIGHT_EE_SITE_NAME,
         )
 
+        self.object_body_id = mujoco.mj_name2id(
+            self.model,
+            mujoco.mjtObj.mjOBJ_BODY,
+            "transport_object",
+        )
+
         if self.left_ee_site_id < 0:
             raise RuntimeError(
                 "Left end-effector site was not found."
@@ -164,6 +192,11 @@ class DualArmTransportEnv:
         if self.right_ee_site_id < 0:
             raise RuntimeError(
                 "Right end-effector site was not found."
+            )
+
+        if self.object_body_id < 0:
+            raise RuntimeError(
+                "Transport object body was not found."
             )
 
         mujoco.mj_forward(
@@ -224,6 +257,39 @@ class DualArmTransportEnv:
                 self.model,
                 self.data,
             )
+
+    def _get_joint_dof_ids(self, joint_names):
+        """
+        Return the MuJoCo DOF addresses corresponding to
+        the supplied one-DOF arm joints.
+        """
+
+        dof_ids = []
+
+        for joint_name in joint_names:
+            joint_id = mujoco.mj_name2id(
+                self.model,
+                mujoco.mjtObj.mjOBJ_JOINT,
+                joint_name,
+            )
+
+            if joint_id < 0:
+                raise RuntimeError(
+                    f"Joint was not found: {joint_name}"
+                )
+
+            dof_ids.append(
+                int(
+                    self.model.jnt_dofadr[
+                        joint_id
+                    ]
+                )
+            )
+
+        return np.asarray(
+            dof_ids,
+            dtype=int,
+        )
 
     def _get_nominal_ee_rotations(self):
         """
@@ -550,3 +616,240 @@ class DualArmTransportEnv:
             self._capture_lifted_state()
 
         self._restore_lifted_state()
+
+    def get_object_state(self):
+        """
+        Return object pose and velocity information.
+
+        Returns
+        -------
+        position : ndarray, shape (3,)
+        quaternion : ndarray, shape (4,)
+            MuJoCo quaternion ordering: [w, x, y, z].
+        linear_velocity : ndarray, shape (3,)
+        angular_velocity : ndarray, shape (3,)
+        """
+
+        position = (
+            self.data.xpos[
+                self.object_body_id
+            ].copy()
+        )
+
+        quaternion = (
+            self.data.xquat[
+                self.object_body_id
+            ].copy()
+        )
+
+        angular_velocity = (
+            self.data.cvel[
+                self.object_body_id,
+                0:3,
+            ].copy()
+        )
+
+        linear_velocity = (
+            self.data.cvel[
+                self.object_body_id,
+                3:6,
+            ].copy()
+        )
+
+        return (
+            position,
+            quaternion,
+            linear_velocity,
+            angular_velocity,
+        )
+
+    def get_transport_target_error(self):
+        """
+        Return the world-frame vector from the current object
+        position to the suspended transport target.
+        """
+
+        (
+            object_position,
+            _,
+            _,
+            _,
+        ) = self.get_object_state()
+
+        return (
+            TRANSPORT_TARGET_POSITION
+            - object_position
+        )
+    
+    def get_local_observation(self, agent):
+        """
+        Build the decentralized observation for one arm.
+
+        Parameters
+        ----------
+        agent : str
+            Either "left" or "right".
+
+        Returns
+        -------
+        observation : ndarray, shape (33,)
+        """
+
+        if agent == "left":
+            joint_q = (
+                self.controller.get_left_arm_qpos()
+            )
+
+            joint_qvel = (
+                self.data.qvel[
+                    self.left_dof_ids
+                ].copy()
+            )
+
+            ee_position = (
+                self.data.site_xpos[
+                    self.left_ee_site_id
+                ].copy()
+            )
+
+        elif agent == "right":
+            joint_q = (
+                self.controller.get_right_arm_qpos()
+            )
+
+            joint_qvel = (
+                self.data.qvel[
+                    self.right_dof_ids
+                ].copy()
+            )
+
+            ee_position = (
+                self.data.site_xpos[
+                    self.right_ee_site_id
+                ].copy()
+            )
+
+        else:
+            raise ValueError(
+                "agent must be either 'left' or 'right'"
+            )
+
+        (
+            object_position,
+            object_quaternion,
+            object_linear_velocity,
+            object_angular_velocity,
+        ) = self.get_object_state()
+
+        target_error = (
+            self.get_transport_target_error()
+        )
+
+        observation = np.concatenate([
+            joint_q,
+            joint_qvel,
+            ee_position,
+            object_position,
+            object_quaternion,
+            object_linear_velocity,
+            object_angular_velocity,
+            target_error,
+        ]).astype(
+            np.float32
+        )
+
+        if observation.shape != (33,):
+            raise RuntimeError(
+                "Unexpected local observation shape: "
+                f"{observation.shape}"
+            )
+
+        return observation
+
+    def get_observations(self):
+        """
+        Return decentralized observations for both agents.
+        """
+
+        return {
+            "left": self.get_local_observation(
+                "left"
+            ),
+            "right": self.get_local_observation(
+                "right"
+            ),
+        }
+
+    def get_global_state(self):
+        """
+        Build the centralized state used by the MAPPO critic.
+
+        The actors do not receive this state.
+        """
+
+        left_q = (
+            self.controller.get_left_arm_qpos()
+        )
+
+        right_q = (
+            self.controller.get_right_arm_qpos()
+        )
+
+        left_qvel = (
+            self.data.qvel[
+                self.left_dof_ids
+            ].copy()
+        )
+
+        right_qvel = (
+            self.data.qvel[
+                self.right_dof_ids
+            ].copy()
+        )
+
+        left_ee_position = (
+            self.data.site_xpos[
+                self.left_ee_site_id
+            ].copy()
+        )
+
+        right_ee_position = (
+            self.data.site_xpos[
+                self.right_ee_site_id
+            ].copy()
+        )
+
+        (
+            object_position,
+            object_quaternion,
+            object_linear_velocity,
+            object_angular_velocity,
+        ) = self.get_object_state()
+
+        target_error = (
+            self.get_transport_target_error()
+        )
+
+        global_state = np.concatenate([
+            left_q,
+            left_qvel,
+            right_q,
+            right_qvel,
+            left_ee_position,
+            right_ee_position,
+            object_position,
+            object_quaternion,
+            object_linear_velocity,
+            object_angular_velocity,
+            target_error,
+        ]).astype(
+            np.float32
+        )
+
+        if global_state.shape != (50,):
+            raise RuntimeError(
+                "Unexpected global-state shape: "
+                f"{global_state.shape}"
+            )
+
+        return global_state
