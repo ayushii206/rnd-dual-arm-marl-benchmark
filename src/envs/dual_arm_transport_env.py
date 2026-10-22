@@ -151,7 +151,44 @@ class DualArmTransportEnv:
     will be added separately.
     """
 
-    def __init__(self, model_path=None):
+    def __init__(
+        self,
+        model_path=None,
+        target_position=None,
+        success_distance=None,
+    ):
+
+        if target_position is None:
+            target_position = TRANSPORT_TARGET_POSITION
+
+        self.target_position = np.asarray(
+            target_position,
+            dtype=np.float64,
+        ).copy()
+
+        if self.target_position.shape != (3,):
+            raise ValueError(
+                "target_position must have shape (3,)."
+            )
+
+        if not np.all(np.isfinite(self.target_position)):
+            raise ValueError(
+                "target_position must contain finite values."
+            )
+
+        if success_distance is None:
+            success_distance = SUCCESS_DISTANCE_M
+
+        self.success_distance = float(success_distance)
+
+        if (
+            not np.isfinite(self.success_distance)
+            or self.success_distance <= 0.0
+        ):
+            raise ValueError(
+                "success_distance must be finite and positive."
+            )
+        
         if model_path is None:
             model_path = DEFAULT_MODEL_PATH
 
@@ -729,7 +766,7 @@ class DualArmTransportEnv:
         ) = self.get_object_state()
 
         return (
-            TRANSPORT_TARGET_POSITION
+            self.target_position
             - object_position
         )
     
@@ -1036,7 +1073,7 @@ class DualArmTransportEnv:
 
         distance = float(
             np.linalg.norm(
-                TRANSPORT_TARGET_POSITION - object_position
+                self.target_position - object_position
             )
         )
 
@@ -1085,7 +1122,7 @@ class DualArmTransportEnv:
         )
 
         success = (
-            distance <= SUCCESS_DISTANCE_M
+            distance <= self.success_distance
             and linear_speed <= SUCCESS_LINEAR_SPEED_M_S
             and angular_speed <= SUCCESS_ANGULAR_SPEED_RAD_S
             and orientation_error <= SUCCESS_ORIENTATION_RAD

@@ -168,7 +168,13 @@ def main():
 
     target_forward_m = args.target
 
-    env = DualArmTransportEnv()
+    env = DualArmTransportEnv(
+        target_position=np.array(
+            [target_forward_m, 0.0, 0.58],
+            dtype=np.float64,
+        ),
+        success_distance=0.01,
+    )
     env.reset()
 
     initial = get_tracking_state(env)
@@ -214,14 +220,16 @@ def main():
             env.right_dof_ids,
         )
 
-        env.apply_actions({
+        (
+            observations,
+            rewards,
+            terminated,
+            truncated,
+            info,
+        ) = env.step({
             "left": left_action,
             "right": right_action,
         })
-
-        terminated = False
-        truncated = False
-        info = {}
 
         current = get_tracking_state(env)
 
@@ -265,12 +273,12 @@ def main():
                 f" | right contacts={right_contacts}"
             )
 
-        if forward_displacement >= target_forward_m:
-            print("\nRequested forward displacement reached.")
-            break
-
         if terminated or truncated:
             print("\nEnvironment episode ended.")
+            break
+
+        if forward_displacement >= target_forward_m:
+            print("\nRequested forward displacement reached.")
             break
 
     final = get_tracking_state(env)

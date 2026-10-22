@@ -33,16 +33,69 @@ def main():
         "--seed", type=int, default=42
     )
 
+    parser.add_argument(
+        "--target-distance",
+        type=float,
+        default=0.38,
+        help="Transport target X distance in meters.",
+    )
+
+    parser.add_argument(
+        "--success-distance",
+        type=float,
+        default=0.03,
+        help="Success tolerance in meters.",
+    )
+
+    parser.add_argument(
+        "--checkpoint-name",
+        type=str,
+        default="ippo_smoke_test.pt",
+        help="Filename for the saved checkpoint.",
+    )
+
     args = parser.parse_args()
 
     if args.total_steps <= 0 or args.rollout_steps <= 0:
         parser.error("Step counts must be positive.")
 
+    if not np.isfinite(args.target_distance):
+        parser.error("Target distance must be finite.")
+
+    if not 0.0 < args.target_distance <= 0.38:
+        parser.error(
+            "Target distance must be between 0 and 0.38 meters."
+        )
+
+    if (
+        not np.isfinite(args.success_distance)
+        or args.success_distance <= 0.0
+    ):
+        parser.error(
+            "Success distance must be finite and positive."
+        )
+
+    if (
+        Path(args.checkpoint_name).name != args.checkpoint_name
+        or not args.checkpoint_name.endswith(".pt")
+    ):
+        parser.error(
+            "Checkpoint name must be a .pt filename."
+        )
+
     torch.set_num_threads(1)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    env = DualArmTransportEnv()
+    target_position = np.array(
+        [args.target_distance, 0.0, 0.58],
+        dtype=np.float64,
+    )
+
+    env = DualArmTransportEnv(
+        target_position=target_position,
+        success_distance=args.success_distance,
+    )
 
     models = {
         name: IPPOActorCritic()
@@ -62,6 +115,7 @@ def main():
 
     total_steps = 0
     completed_episodes = 0
+    successful_episodes = 0
     episode_return = 0.0
     episode_length = 0
     update_number = 0
@@ -72,6 +126,10 @@ def main():
     print("Total steps:", args.total_steps)
     print("Rollout steps:", args.rollout_steps)
     print("Seed:", args.seed)
+    print("Transport target:", env.target_position)
+    print("Success tolerance:", env.success_distance)
+    print("Initial target distance:",
+          np.linalg.norm(env.get_transport_target_error()))
 
     while total_steps < args.total_steps:
         buffers = {
@@ -187,11 +245,15 @@ def main():
 
             if done:
                 completed_episodes += 1
+                successful_episodes += int(info["success"])
 
                 print(
                     f"Episode {completed_episodes}: "
                     f"return={episode_return:.3f}, "
                     f"length={episode_length}, "
+                    f"distance={info['distance_to_target']:.4f}m, "
+                    f"success={info['success']}, "
+                    f"dropped={info['dropped']}, "
                     f"terminated={terminated}, "
                     f"truncated={truncated}"
                 )
@@ -242,12 +304,17 @@ def main():
     )
 
     checkpoint_path = (
-        checkpoint_dir / "ippo_smoke_test.pt"
+        checkpoint_dir / args.checkpoint_name
     )
 
     torch.save(
         {
             "algorithm": "IPPO",
+            "success_distance": env.success_distance,
+            "target_position": env.target_position.tolist(),
+            "rollout_steps": args.rollout_steps,
+            "completed_episodes": completed_episodes,
+            "successful_episodes": successful_episodes,
             "seed": args.seed,
             "total_steps": total_steps,
             "update_number": update_number,
@@ -267,6 +334,13 @@ def main():
     print("IPPO TRAINING SMOKE TEST COMPLETE")
     print("Environment steps:", total_steps)
     print("Completed episodes:", completed_episodes)
+    if completed_episodes > 0:
+        success_rate = (
+            100.0 * successful_episodes / completed_episodes
+        )
+        print(f"Episode success rate: {success_rate:.1f}%")
+    else:
+        print("Episode success rate: N/A (no completed episodes)")
     print("Checkpoint:", checkpoint_path)
     print("=" * 70)
 
