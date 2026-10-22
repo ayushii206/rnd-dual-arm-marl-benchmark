@@ -82,6 +82,16 @@ TRANSPORT_TARGET_POSITION = np.array([
     0.580,
 ])
 
+# ============================================================
+# MARL action configuration
+# ============================================================
+
+ACTION_DIM_PER_AGENT = 7
+
+ACTION_SCALE_RAD = 0.005
+
+PHYSICS_STEPS_PER_ACTION = 10
+
 LEFT_EE_SITE_NAME = "left_ee_site"
 RIGHT_EE_SITE_NAME = "right_ee_site"
 
@@ -209,6 +219,10 @@ class DualArmTransportEnv:
         # ----------------------------------------------------
 
         self._lifted_state_cache = None
+
+        # Joint-position targets maintained between RL steps.
+        self._left_action_target = None
+        self._right_action_target = None
 
     @property
     def timestep(self):
@@ -616,6 +630,13 @@ class DualArmTransportEnv:
             self._capture_lifted_state()
 
         self._restore_lifted_state()
+        self._left_action_target = (
+            self.controller.get_left_arm_qpos().copy()
+        )
+
+        self._right_action_target = (
+            self.controller.get_right_arm_qpos().copy()
+        )
 
     def get_object_state(self):
         """
@@ -853,3 +874,119 @@ class DualArmTransportEnv:
             )
 
         return global_state
+
+    def apply_actions(self, actions):
+        """
+        Apply one simultaneous decentralized action from
+        each Panda arm.
+
+        Parameters
+        ----------
+        actions : dict
+            {
+                "left": array of shape (7,),
+                "right": array of shape (7,)
+            }
+
+        Each action component is normalized to [-1, 1].
+
+        This is the action/physics interface only.
+        Reward and episode termination will be added later.
+        """
+
+        if (
+            self._left_action_target is None
+            or self._right_action_target is None
+        ):
+            raise RuntimeError(
+                "Call env.reset() before applying RL actions."
+            )
+
+        if not isinstance(actions, dict):
+            raise TypeError(
+                "actions must be a dictionary."
+            )
+
+        if set(actions.keys()) != {"left", "right"}:
+            raise ValueError(
+                "actions must contain exactly "
+                "'left' and 'right'."
+            )
+
+        processed_actions = {}
+
+        for agent in ("left", "right"):
+            action = np.asarray(
+                actions[agent],
+                dtype=np.float64,
+            )
+
+            if action.shape != (ACTION_DIM_PER_AGENT,):
+                raise ValueError(
+                    f"{agent} action must have shape "
+                    f"({ACTION_DIM_PER_AGENT},)."
+                )
+
+            if not np.all(np.isfinite(action)):
+                raise ValueError(
+                    f"{agent} action contains NaN or infinity."
+                )
+
+            processed_actions[agent] = np.clip(
+                action,
+                -1.0,
+                1.0,
+            )
+
+        # Compute both new targets before changing either.
+        new_left_target = (
+            self._left_action_target
+            + ACTION_SCALE_RAD
+            * processed_actions["left"]
+        )
+
+        new_right_target = (
+            self._right_action_target
+            + ACTION_SCALE_RAD
+            * processed_actions["right"]
+        )
+
+        # Respect the actuator's configured position-control
+        # range. Both targets are updated symmetrically.
+        left_ranges = self.model.actuator_ctrlrange[
+            self.controller.left_arm_actuator_ids
+        ]
+
+        right_ranges = self.model.actuator_ctrlrange[
+            self.controller.right_arm_actuator_ids
+        ]
+
+        new_left_target = np.clip(
+            new_left_target,
+            left_ranges[:, 0],
+            left_ranges[:, 1],
+        )
+
+        new_right_target = np.clip(
+            new_right_target,
+            right_ranges[:, 0],
+            right_ranges[:, 1],
+        )
+
+        self._left_action_target = new_left_target
+        self._right_action_target = new_right_target
+
+        # Keep both grippers closed throughout transport.
+        self.controller.set_grippers(
+            CLOSE_GRIPPER_CTRL
+        )
+
+        # Maintain the same low-level controller used by
+        # the validated classical baseline.
+        for _ in range(PHYSICS_STEPS_PER_ACTION):
+            self.controller.step(
+                self._left_action_target,
+                self._right_action_target,
+            )
+
+        return self.get_observations()
