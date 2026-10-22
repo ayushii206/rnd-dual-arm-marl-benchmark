@@ -92,6 +92,23 @@ ACTION_SCALE_RAD = 0.005
 
 PHYSICS_STEPS_PER_ACTION = 10
 
+# Episode configuration
+MAX_EPISODE_STEPS = 500
+SUCCESS_DISTANCE_M = 0.03
+SUCCESS_LINEAR_SPEED_M_S = 0.05
+SUCCESS_ANGULAR_SPEED_RAD_S = 0.20
+SUCCESS_ORIENTATION_RAD = 0.20
+DROP_HEIGHT_M = 0.48
+
+# Reward weights
+PROGRESS_WEIGHT = 20.0
+DISTANCE_WEIGHT = 0.1
+ORIENTATION_WEIGHT = 0.2
+ANGULAR_VELOCITY_WEIGHT = 0.02
+ACTION_WEIGHT = 0.001
+SUCCESS_BONUS = 20.0
+DROP_PENALTY = 20.0
+
 LEFT_EE_SITE_NAME = "left_ee_site"
 RIGHT_EE_SITE_NAME = "right_ee_site"
 
@@ -223,6 +240,9 @@ class DualArmTransportEnv:
         # Joint-position targets maintained between RL steps.
         self._left_action_target = None
         self._right_action_target = None
+        self._episode_step_count = 0
+        self._previous_target_distance = None
+        self._episode_done = False
 
     @property
     def timestep(self):
@@ -638,6 +658,17 @@ class DualArmTransportEnv:
             self.controller.get_right_arm_qpos().copy()
         )
 
+        self._episode_step_count = 0
+        self._episode_done = False
+
+        self._previous_target_distance = float(
+            np.linalg.norm(
+                self.get_transport_target_error()
+            )
+        )
+
+        return self.get_observations()
+
     def get_object_state(self):
         """
         Return object pose and velocity information.
@@ -990,3 +1021,150 @@ class DualArmTransportEnv:
             )
 
         return self.get_observations()
+
+    def _compute_transport_reward(self, actions):
+        """
+        Compute shared team reward and episode status.
+        """
+
+        (
+            object_position,
+            object_quaternion,
+            linear_velocity,
+            angular_velocity,
+        ) = self.get_object_state()
+
+        distance = float(
+            np.linalg.norm(
+                TRANSPORT_TARGET_POSITION - object_position
+            )
+        )
+
+        # MuJoCo quaternion order is [w, x, y, z].
+        # This measures deviation from the initial upright
+        # world orientation, independent of quaternion sign.
+        q_w = float(
+            np.clip(
+                abs(object_quaternion[0]),
+                0.0,
+                1.0,
+            )
+        )
+
+        orientation_error = float(
+            2.0 * np.arccos(q_w)
+        )
+
+        linear_speed = float(
+            np.linalg.norm(linear_velocity)
+        )
+
+        angular_speed = float(
+            np.linalg.norm(angular_velocity)
+        )
+
+        progress = (
+            self._previous_target_distance - distance
+        )
+
+        action_cost = float(
+            np.mean(
+                np.concatenate([
+                    np.asarray(actions["left"]),
+                    np.asarray(actions["right"]),
+                ]) ** 2
+            )
+        )
+
+        reward = (
+            PROGRESS_WEIGHT * progress
+            - DISTANCE_WEIGHT * distance
+            - ORIENTATION_WEIGHT * orientation_error
+            - ANGULAR_VELOCITY_WEIGHT * angular_speed
+            - ACTION_WEIGHT * action_cost
+        )
+
+        success = (
+            distance <= SUCCESS_DISTANCE_M
+            and linear_speed <= SUCCESS_LINEAR_SPEED_M_S
+            and angular_speed <= SUCCESS_ANGULAR_SPEED_RAD_S
+            and orientation_error <= SUCCESS_ORIENTATION_RAD
+        )
+
+        dropped = (
+            object_position[2] < DROP_HEIGHT_M
+        )
+
+        if success:
+            reward += SUCCESS_BONUS
+
+        if dropped:
+            reward -= DROP_PENALTY
+
+        terminated = bool(success or dropped)
+
+        truncated = bool(
+            self._episode_step_count >= MAX_EPISODE_STEPS
+            and not terminated
+        )
+
+        self._previous_target_distance = distance
+
+        info = {
+            "distance_to_target": distance,
+            "progress": float(progress),
+            "orientation_error_rad": orientation_error,
+            "linear_speed": linear_speed,
+            "angular_speed": angular_speed,
+            "success": bool(success),
+            "dropped": bool(dropped),
+            "episode_step": self._episode_step_count,
+        }
+
+        return (
+            float(reward),
+            terminated,
+            truncated,
+            info,
+        )
+
+    def step(self, actions):
+        """
+        Advance one multi-agent RL step.
+        """
+
+        if self._episode_done:
+            raise RuntimeError(
+                "Episode finished. Call reset() first."
+            )
+
+        if self._previous_target_distance is None:
+            raise RuntimeError(
+                "Call reset() before step()."
+            )
+
+        observations = self.apply_actions(actions)
+
+        self._episode_step_count += 1
+
+        (
+            team_reward,
+            terminated,
+            truncated,
+            info,
+        ) = self._compute_transport_reward(actions)
+
+        self._episode_done = terminated or truncated
+
+        rewards = {
+            "left": team_reward,
+            "right": team_reward,
+        }
+
+        return (
+            observations,
+            rewards,
+            terminated,
+            truncated,
+            info,
+        )
