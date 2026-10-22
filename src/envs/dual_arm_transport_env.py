@@ -101,9 +101,9 @@ SUCCESS_ORIENTATION_RAD = 0.20
 DROP_HEIGHT_M = 0.48
 
 # Reward weights
-PROGRESS_WEIGHT = 20.0
+PROGRESS_WEIGHT = 50.0
 DISTANCE_WEIGHT = 0.1
-ORIENTATION_WEIGHT = 0.2
+ORIENTATION_WEIGHT = 0.05
 ANGULAR_VELOCITY_WEIGHT = 0.02
 ACTION_WEIGHT = 0.001
 SUCCESS_BONUS = 20.0
@@ -706,6 +706,37 @@ class DualArmTransportEnv:
 
         return self.get_observations()
 
+    def get_grasp_contacts(self):
+        """
+        Count contacts between each arm's finger geometries
+        and the transported object.
+
+        Geometry IDs are validated for the current MuJoCo model.
+        These should later be resolved by geometry names.
+        """
+        left_finger_geoms = set(range(68, 84))
+        right_finger_geoms = set(range(149, 165))
+        object_geoms = set(range(165, 170))
+
+        left_contacts = 0
+        right_contacts = 0
+
+        for i in range(self.data.ncon):
+            contact = self.data.contact[i]
+
+            pair = {
+                int(contact.geom1),
+                int(contact.geom2),
+            }
+
+            if pair & object_geoms and pair & left_finger_geoms:
+                left_contacts += 1
+
+            if pair & object_geoms and pair & right_finger_geoms:
+                right_contacts += 1
+
+        return left_contacts, right_contacts
+
     def get_object_state(self):
         """
         Return object pose and velocity information.
@@ -1121,11 +1152,21 @@ class DualArmTransportEnv:
             - ACTION_WEIGHT * action_cost
         )
 
+        left_contacts, right_contacts = self.get_grasp_contacts()
+
+        left_grasp_contact = left_contacts > 0
+        right_grasp_contact = right_contacts > 0
+
+        cooperative_grasp = (
+            left_grasp_contact and right_grasp_contact
+        )
+
         success = (
             distance <= self.success_distance
             and linear_speed <= SUCCESS_LINEAR_SPEED_M_S
             and angular_speed <= SUCCESS_ANGULAR_SPEED_RAD_S
             and orientation_error <= SUCCESS_ORIENTATION_RAD
+            and cooperative_grasp
         )
 
         dropped = (
@@ -1156,6 +1197,11 @@ class DualArmTransportEnv:
             "success": bool(success),
             "dropped": bool(dropped),
             "episode_step": self._episode_step_count,
+            "left_grasp_contact": bool(left_grasp_contact),
+            "right_grasp_contact": bool(right_grasp_contact),
+            "cooperative_grasp": bool(cooperative_grasp),
+            "left_contact_count": int(left_contacts),
+            "right_contact_count": int(right_contacts),
         }
 
         return (
