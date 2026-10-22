@@ -106,6 +106,7 @@ DISTANCE_WEIGHT = 0.1
 ORIENTATION_WEIGHT = 0.05
 ANGULAR_VELOCITY_WEIGHT = 0.02
 ACTION_WEIGHT = 0.001
+GRASP_LOSS_PENALTY = 0.02
 SUCCESS_BONUS = 20.0
 DROP_PENALTY = 20.0
 
@@ -1161,6 +1162,16 @@ class DualArmTransportEnv:
             left_grasp_contact and right_grasp_contact
         )
 
+        missing_grasp_count = (
+            int(not left_grasp_contact)
+            + int(not right_grasp_contact)
+        )
+
+        grasp_loss_penalty = (
+            GRASP_LOSS_PENALTY * missing_grasp_count
+        )
+        reward -= grasp_loss_penalty
+
         success = (
             distance <= self.success_distance
             and linear_speed <= SUCCESS_LINEAR_SPEED_M_S
@@ -1202,6 +1213,8 @@ class DualArmTransportEnv:
             "cooperative_grasp": bool(cooperative_grasp),
             "left_contact_count": int(left_contacts),
             "right_contact_count": int(right_contacts),
+            "missing_grasp_count": int(missing_grasp_count),
+            "grasp_loss_penalty": float(grasp_loss_penalty),
         }
 
         return (
