@@ -54,6 +54,19 @@ def main():
         help="Filename for the saved checkpoint.",
     )
 
+    parser.add_argument(
+        "--action-mode",
+        choices=("joint", "cartesian"),
+        default="joint",
+        help="Joint-space 7D or Cartesian-space 3D actions.",
+    )
+    
+    parser.add_argument(
+        "--progress-weight",
+        type=float,
+        default=50.0,
+        help="Weight of progress reward (R3=50, R4=100).",
+    )
     args = parser.parse_args()
 
     if args.total_steps <= 0 or args.rollout_steps <= 0:
@@ -95,10 +108,14 @@ def main():
     env = DualArmTransportEnv(
         target_position=target_position,
         success_distance=args.success_distance,
+        action_mode=args.action_mode,
+        progress_weight=args.progress_weight,
     )
 
     models = {
-        name: IPPOActorCritic()
+        name: IPPOActorCritic(
+            action_dim=env.action_dim_per_agent
+        )
         for name in AGENTS
     }
 
@@ -126,14 +143,20 @@ def main():
     print("Total steps:", args.total_steps)
     print("Rollout steps:", args.rollout_steps)
     print("Seed:", args.seed)
+    print("Action mode:", env.action_mode)
+    print("Action dimension:", env.action_dim_per_agent)
     print("Transport target:", env.target_position)
     print("Success tolerance:", env.success_distance)
+    print("Progress reward weight:", env.progress_weight)
     print("Initial target distance:",
           np.linalg.norm(env.get_transport_target_error()))
 
     while total_steps < args.total_steps:
         buffers = {
-            name: RolloutBuffer()
+            name: RolloutBuffer(
+                observation_dim=33,
+                action_dim=env.action_dim_per_agent,
+            )
             for name in AGENTS
         }
 
@@ -310,7 +333,10 @@ def main():
     torch.save(
         {
             "algorithm": "IPPO",
+            "action_mode": env.action_mode,
+            "action_dim": env.action_dim_per_agent,
             "success_distance": env.success_distance,
+            "progress_weight": env.progress_weight,
             "target_position": env.target_position.tolist(),
             "rollout_steps": args.rollout_steps,
             "completed_episodes": completed_episodes,

@@ -2,8 +2,7 @@
 import numpy as np
 import mujoco
 
-from src.envs.dual_arm_transport_env import ACTION_SCALE_RAD
-
+ACTION_SCALE_RAD = 0.005
 
 DAMPING = 0.05
 MAX_ACTION_MAGNITUDE = 0.25

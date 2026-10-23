@@ -5,7 +5,7 @@ import numpy as np
 
 from src.controllers.classical_controller import ClassicalController
 from src.controllers.ik_controller import solve_pose_ik
-
+from src.controllers.jacobian_action import calculate_cartesian_action
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -87,6 +87,8 @@ TRANSPORT_TARGET_POSITION = np.array([
 # ============================================================
 
 ACTION_DIM_PER_AGENT = 7
+CARTESIAN_ACTION_DIM = 3
+CARTESIAN_ACTION_SCALE_M = 0.0005
 
 ACTION_SCALE_RAD = 0.005
 
@@ -157,7 +159,30 @@ class DualArmTransportEnv:
         model_path=None,
         target_position=None,
         success_distance=None,
+        action_mode="joint",
+        progress_weight=PROGRESS_WEIGHT,
     ):
+        if action_mode not in ("joint", "cartesian"):
+            raise ValueError(
+                "action_mode must be 'joint' or 'cartesian'."
+            )
+
+        self.action_mode = action_mode
+        self.progress_weight = float(progress_weight)
+
+        if (
+            not np.isfinite(self.progress_weight)
+            or self.progress_weight <= 0.0
+        ):
+            raise ValueError(
+                "progress_weight must be finite and positive."
+            )
+
+        self.action_dim_per_agent = (
+            ACTION_DIM_PER_AGENT
+            if action_mode == "joint"
+            else CARTESIAN_ACTION_DIM
+        )
 
         if target_position is None:
             target_position = TRANSPORT_TARGET_POSITION
@@ -1021,10 +1046,10 @@ class DualArmTransportEnv:
                 dtype=np.float64,
             )
 
-            if action.shape != (ACTION_DIM_PER_AGENT,):
+            if action.shape != (self.action_dim_per_agent,):
                 raise ValueError(
                     f"{agent} action must have shape "
-                    f"({ACTION_DIM_PER_AGENT},)."
+                    f"({self.action_dim_per_agent},)."
                 )
 
             if not np.all(np.isfinite(action)):
@@ -1037,6 +1062,25 @@ class DualArmTransportEnv:
                 -1.0,
                 1.0,
             )
+        if self.action_mode == "cartesian":
+            cartesian_actions = processed_actions
+
+            processed_actions = {
+                "left": calculate_cartesian_action(
+                    self,
+                    self.left_ee_site_id,
+                    self.left_dof_ids,
+                    cartesian_actions["left"]
+                    * CARTESIAN_ACTION_SCALE_M,
+                ),
+                "right": calculate_cartesian_action(
+                    self,
+                    self.right_ee_site_id,
+                    self.right_dof_ids,
+                    cartesian_actions["right"]
+                    * CARTESIAN_ACTION_SCALE_M,
+                ),
+            }
 
         # Compute both new targets before changing either.
         new_left_target = (
@@ -1146,7 +1190,7 @@ class DualArmTransportEnv:
         )
 
         reward = (
-            PROGRESS_WEIGHT * progress
+            self.progress_weight * progress
             - DISTANCE_WEIGHT * distance
             - ORIENTATION_WEIGHT * orientation_error
             - ANGULAR_VELOCITY_WEIGHT * angular_speed

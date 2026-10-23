@@ -30,14 +30,19 @@ class IPPOActorCritic(nn.Module):
     Actions use a tanh-squashed Gaussian distribution.
     """
 
-    def __init__(self):
+    def __init__(self, action_dim=ACTION_DIM):
         super().__init__()
 
-        self.actor = build_mlp(OBS_DIM, ACTION_DIM)
+        if action_dim <= 0:
+            raise ValueError("action_dim must be positive.")
+
+        self.action_dim = action_dim
+
+        self.actor = build_mlp(OBS_DIM, action_dim)
         self.critic = build_mlp(OBS_DIM, 1)
 
         self.log_std = nn.Parameter(
-            torch.full((ACTION_DIM,), -1.0)
+            torch.full((action_dim,), -1.0)
         )
 
     def _distribution(self, observations):

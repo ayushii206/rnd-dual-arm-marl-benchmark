@@ -18,13 +18,13 @@ from scripts.test_coordinated_transport import get_grasp_contacts
 AGENTS = ("left", "right")
 
 
+
 def build_models(checkpoint_path, seed):
     torch.manual_seed(seed)
 
-    models = {
-        name: IPPOActorCritic()
-        for name in AGENTS
-    }
+    checkpoint = None
+    action_mode = "joint"
+    action_dim = 7
 
     if checkpoint_path is not None:
         # Load only checkpoints you created or trust.
@@ -37,6 +37,26 @@ def build_models(checkpoint_path, seed):
         if checkpoint["algorithm"] != "IPPO":
             raise ValueError("Checkpoint is not IPPO.")
 
+        # Older checkpoints did not store action metadata.
+        action_mode = checkpoint.get("action_mode", "joint")
+        action_dim = checkpoint.get("action_dim", 7)
+
+        expected_dim = 7 if action_mode == "joint" else 3
+
+        if action_mode not in ("joint", "cartesian"):
+            raise ValueError("Unknown checkpoint action mode.")
+
+        if action_dim != expected_dim:
+            raise ValueError(
+                "Checkpoint action mode/dimension mismatch."
+            )
+
+    models = {
+        name: IPPOActorCritic(action_dim=action_dim)
+        for name in AGENTS
+    }
+
+    if checkpoint is not None:
         for name in AGENTS:
             models[name].load_state_dict(
                 checkpoint["models"][name]
@@ -45,7 +65,7 @@ def build_models(checkpoint_path, seed):
     for model in models.values():
         model.eval()
 
-    return models
+    return models, action_mode
 
 
 def evaluate_policy(
@@ -55,10 +75,12 @@ def evaluate_policy(
     episodes,
     seed,
     stochastic,
+    action_mode,
 ):
     env = DualArmTransportEnv(
         target_position=target_position,
         success_distance=success_distance,
+        action_mode=action_mode,
     )
 
     results = []
@@ -69,6 +91,11 @@ def evaluate_policy(
 
         episode_return = 0.0
         episode_steps = 0
+        min_distance_m = float(
+            np.linalg.norm(initial_position - target_position)
+        )
+        step_at_min_distance = 0
+        both_contacts_at_min_distance = False
         left_missing_contact_steps = 0
         right_missing_contact_steps = 0
         both_missing_contact_steps = 0
@@ -79,6 +106,10 @@ def evaluate_policy(
 
         min_left_contacts = initial_left_contacts
         min_right_contacts = initial_right_contacts
+        both_contacts_at_min_distance = (
+            initial_left_contacts > 0
+            and initial_right_contacts > 0
+        )
 
         # Seeds action sampling for reproducible comparisons.
         torch.manual_seed(seed + episode)
@@ -120,6 +151,14 @@ def evaluate_policy(
             episode_steps += 1
             left_contacts, right_contacts = get_grasp_contacts(env)
 
+            current_distance = float(info["distance_to_target"])
+            if current_distance < min_distance_m:
+                min_distance_m = current_distance
+                step_at_min_distance = episode_steps
+                both_contacts_at_min_distance = (
+                    left_contacts > 0 and right_contacts > 0
+                )
+
             min_left_contacts = min(
                 min_left_contacts, left_contacts
             )
@@ -154,6 +193,11 @@ def evaluate_policy(
             "final_distance_m": float(
                 info["distance_to_target"]
             ),
+            "min_distance_m": min_distance_m,
+            "step_at_min_distance": step_at_min_distance,
+            "both_contacts_at_min_distance": (
+                both_contacts_at_min_distance
+            ),
             "forward_displacement_m": float(
                 final_position[0] - initial_position[0]
             ),
@@ -176,6 +220,7 @@ def evaluate_policy(
             "left_missing_contact_steps": left_missing_contact_steps,
             "right_missing_contact_steps": right_missing_contact_steps,
             "both_missing_contact_steps": both_missing_contact_steps,
+            "action_mode": action_mode,
         })
 
     return results
@@ -271,7 +316,7 @@ def main():
         ):
             parser.error("Checkpoint success tolerance mismatch.")
 
-    models = build_models(
+    models, action_mode = build_models(
         checkpoint_path,
         args.seed,
     )
@@ -287,6 +332,7 @@ def main():
         episodes=args.episodes,
         seed=args.seed,
         stochastic=args.stochastic,
+        action_mode=action_mode,
     )
 
     output_path = PROJECT_ROOT / args.output
@@ -330,6 +376,7 @@ def main():
     print(f"Mean forward displacement: {mean_forward:.5f} m")
     print("CSV:", output_path)
     print("=" * 70)
+    print("Control representation:", action_mode)
 
 
 if __name__ == "__main__":
