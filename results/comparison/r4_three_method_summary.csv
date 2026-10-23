@@ -1,0 +1,8 @@
+algorithm,training_seed,evaluation_mode,episodes,successes,success_rate_pct,mean_steps_all,mean_steps_success_only,mean_final_distance_mm,mean_final_orientation_deg,drops,source_file
+IPPO,42.0,stochastic_reported,20,0,0.0,500.0,,30.331725587898973,10.429830012625507,0,results/ippo_cartesian_r4_10k_stochastic_eval.csv
+IPPO,123.0,stochastic_reported,20,0,0.0,500.0,,24.215197152492642,2.281088960697044,0,results/ippo_r4_seed123_stochastic_eval.csv
+IPPO,456.0,stochastic_reported,20,0,0.0,500.0,,39.75991768534254,10.969252012840261,0,results/ippo_r4_seed456_stochastic_eval.csv
+MAPPO,42.0,stochastic_reported,20,16,80.0,396.95,371.1875,10.863264986963769,6.932992675501022,0,results/mappo_cartesian_r4_10k_stochastic_eval.csv
+MAPPO,123.0,stochastic_reported,20,17,85.0,309.1,275.4117647058824,12.079451968105591,4.718680525060805,0,results/mappo_r4_seed123_stochastic_eval.csv
+MAPPO,456.0,stochastic_reported,20,20,100.0,230.1,230.1,9.921924129289975,1.8170763868278255,0,results/mappo_r4_seed456_stochastic_eval.csv
+Classical Cartesian P,,deterministic_single_run,1,1,100.0,326.0,326.0,9.958229130668553,0.1940413227726953,0,results/classical/classical_cartesian_5cm_kp10.csv
