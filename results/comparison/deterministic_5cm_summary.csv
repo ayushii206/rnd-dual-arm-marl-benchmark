@@ -1,0 +1,7 @@
+algorithm,training_seed,success,steps,final_distance_mm,evaluation_mode
+IPPO,42,False,500,30.769,deterministic
+IPPO,123,True,282,9.987,deterministic
+IPPO,456,False,500,45.115,deterministic
+MAPPO,42,False,500,22.779,deterministic
+MAPPO,123,True,248,9.882,deterministic
+MAPPO,456,True,226,9.995,deterministic

@@ -1,0 +1,6 @@
+algorithm,training_seed,training_target_cm,test_target_cm,max_steps,steps,success,forward_displacement_cm,final_distance_mm,final_orientation_deg,final_left_contacts,final_right_contacts
+Classical Cartesian P,N/A,N/A,10,500,500,False,8.861,11.417,0.193,52,52
+Classical Cartesian P,N/A,N/A,10,750,527,True,9.006,9.961,0.193,52,52
+IPPO,123,5,10,500,500,False,7.074,30.937,7.988,47,21
+MAPPO,123,5,10,500,500,False,7.085,31.943,8.26,16,5
+MAPPO,456,5,10,500,500,False,9.436,19.166,14.241,38,10
