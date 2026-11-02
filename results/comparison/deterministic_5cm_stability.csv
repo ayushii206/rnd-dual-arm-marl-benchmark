@@ -1,0 +1,4 @@
+method,checkpoint,evaluation_mode,success,rl_steps,physics_steps,final_distance_mm,mean_tilt_deg,max_tilt_deg,max_orientation_error_deg,max_angular_speed_rad_s,both_grasp_contact_pct,palm_contact_affected_physics_steps,inter_arm_contact_points,robot_environment_contact_points
+Classical,none,deterministic,True,326,3260,9.958,0.0123,0.0202,0.1973,0.01091,100.0,0,0,0
+IPPO,ippo_r4_seed123_10k.pt,deterministic,True,282,2820,9.987,1.6651,3.4781,3.5746,0.0479,100.0,2472,0,0
+MAPPO,mappo_r4_seed456_10k.pt,deterministic,True,226,2260,9.995,1.5347,3.1771,3.1883,0.04032,100.0,1848,0,0
